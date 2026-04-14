@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parsePattern } from "../../../src/analyzers/pattern-parser.js";
+import { matchesBash, parsePattern } from "../../../src/analyzers/pattern-parser.js";
 import { __registerHandlerForTests } from "../../../src/handlers/index.js";
-import type { HandlerDefinition } from "../../../src/types.js";
+import type { HandlerDefinition, SimpleCommand } from "../../../src/types.js";
 
 const fakeHandler: HandlerDefinition = { match: () => true };
 const fakeHandlerWithArgs: HandlerDefinition = {
@@ -129,5 +129,81 @@ describe("parsePattern — suffixes", () => {
 
 	it("throws on empty pipe target", () => {
 		expect(() => parsePattern("Bash(curl:*)|")).toThrow();
+	});
+});
+
+const sc = (argv: string[], overrides: Partial<SimpleCommand> = {}): SimpleCommand => ({
+	argv,
+	argvKinds: argv.map(() => "literal" as const),
+	argv0Basename: argv[0]?.includes("/")
+		? argv[0].slice(argv[0].lastIndexOf("/") + 1)
+		: (argv[0] ?? ""),
+	redirects: [],
+	source: "top",
+	raw: argv.join(" "),
+	...overrides,
+});
+
+describe("matchesBash — argv0", () => {
+	it("matches by literal argv0", () => {
+		const r = parsePattern("Bash(rm:*)");
+		expect(matchesBash(r, sc(["rm", "-rf", "/tmp"]), [], "/cwd")).toBe(true);
+		expect(matchesBash(r, sc(["ls"]), [], "/cwd")).toBe(false);
+	});
+
+	it("matches /bin/rm by argv0Basename", () => {
+		const r = parsePattern("Bash(rm:*)");
+		const cmd = sc(["/bin/rm", "-rf", "/tmp"]);
+		expect(cmd.argv0Basename).toBe("rm");
+		expect(matchesBash(r, cmd, [], "/cwd")).toBe(true);
+	});
+
+	it("refuses to match when argv0Kind is variable", () => {
+		const r = parsePattern("Bash(rm:*)");
+		const cmd = sc(["$X", "-rf", "/tmp"], {
+			argvKinds: ["variable", "literal", "literal"],
+			argv0Basename: "$X",
+		});
+		expect(matchesBash(r, cmd, [], "/cwd")).toBe(false);
+	});
+
+	it("refuses to match when argv0Kind is substitution", () => {
+		const r = parsePattern("Bash(rm:*)");
+		const cmd = sc(["$(echo rm)", "-rf", "/tmp"], {
+			argvKinds: ["substitution", "literal", "literal"],
+			argv0Basename: "$(echo rm)",
+		});
+		expect(matchesBash(r, cmd, [], "/cwd")).toBe(false);
+	});
+});
+
+describe("matchesBash — argvAll positional", () => {
+	it("matches when argvAll is a prefix (with :*)", () => {
+		const r = parsePattern("Bash(rm -rf:*)");
+		expect(matchesBash(r, sc(["rm", "-rf", "/tmp"]), [], "/cwd")).toBe(true);
+		expect(matchesBash(r, sc(["rm", "-i", "/tmp"]), [], "/cwd")).toBe(false);
+	});
+
+	it("exact match when no tail wildcard", () => {
+		const r = parsePattern("Bash(git push)");
+		expect(matchesBash(r, sc(["git", "push"]), [], "/cwd")).toBe(true);
+		expect(matchesBash(r, sc(["git", "push", "origin"]), [], "/cwd")).toBe(false);
+	});
+
+	it("exact match returns true on argv0-only with no argvAll", () => {
+		// Bash(ls) should match exactly `ls` — no args
+		const r = parsePattern("Bash(ls)");
+		expect(matchesBash(r, sc(["ls"]), [], "/cwd")).toBe(true);
+		expect(matchesBash(r, sc(["ls", "-la"]), [], "/cwd")).toBe(false);
+	});
+});
+
+describe("matchesBash — requiresPositional (:+)", () => {
+	it(":+ requires a non-flag positional after argvAll", () => {
+		const r = parsePattern("Bash(npm install:+)");
+		expect(matchesBash(r, sc(["npm", "install", "react"]), [], "/cwd")).toBe(true);
+		expect(matchesBash(r, sc(["npm", "install"]), [], "/cwd")).toBe(false);
+		expect(matchesBash(r, sc(["npm", "install", "--save-dev"]), [], "/cwd")).toBe(false);
+		expect(matchesBash(r, sc(["npm", "install", "--save-dev", "react"]), [], "/cwd")).toBe(true);
 	});
 });
