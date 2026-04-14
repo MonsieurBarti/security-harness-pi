@@ -193,7 +193,7 @@ describe("Group 15: base64 / decoder payloads", () => {
 	// a bare "sh" at the end of a pipeline where the source is not curl/wget.
 	// Fix: add a rule or extend curl-pipe-shell handler to flag any pipeline ending in
 	// sh/bash/zsh regardless of the upstream producer.
-	it.skip("echo <b64> | base64 -d | sh", () => expectBlocked("echo cm0gLXJmIC8= | base64 -d | sh"));
+	it("echo <b64> | base64 -d | sh", () => expectBlocked("echo cm0gLXJmIC8= | base64 -d | sh"));
 });
 
 describe("Group 16: git push sensitive", () => {

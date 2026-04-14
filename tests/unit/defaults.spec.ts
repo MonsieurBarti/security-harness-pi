@@ -76,6 +76,7 @@ describe("DEFAULT_ASK", () => {
 			"ask.net-download-exec",
 			"ask.dynamic-interpreter",
 			"ask.path-manip",
+			"ask.pipe-to-shell",
 		];
 		for (const id of required) expect(ids).toContain(id);
 	});

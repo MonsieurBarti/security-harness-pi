@@ -238,4 +238,12 @@ export const DEFAULT_ASK: Rule[] = [
 		match: { argv0: ["env"] },
 		reason: "env prefix can alter the PATH — approval required.",
 	},
+	{
+		id: "ask.pipe-to-shell",
+		description: "command piped into a shell interpreter",
+		kind: "bash",
+		severity: "ask",
+		match: { custom: "pipe-to-shell" },
+		reason: "Piping into a shell interpreter requires approval.",
+	},
 ];
