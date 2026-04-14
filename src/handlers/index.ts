@@ -1,12 +1,15 @@
 import type { HandlerDefinition } from "../types.js";
 import { cargoAdd } from "./cargo-add.js";
 import { curlPipeShell } from "./curl-pipe-shell.js";
+import { forkBomb } from "./fork-bomb.js";
 import { gitPushBranch } from "./git-push-branch.js";
 import { gitPushDefaultBranch } from "./git-push-default-branch.js";
 import { gitPushForce } from "./git-push-force.js";
+import { nonliteralArgv0 } from "./nonliteral-argv0.js";
 import { npmInstallWithPkg } from "./npm-install-with-pkg.js";
 import { pathEscapesProject } from "./path-escapes-project.js";
 import { pipInstallWithPkg } from "./pip-install-with-pkg.js";
+import { pipeToShell } from "./pipe-to-shell.js";
 import { reverseShell } from "./reverse-shell.js";
 
 const registry: Record<string, HandlerDefinition> = {
@@ -19,6 +22,9 @@ const registry: Record<string, HandlerDefinition> = {
 	"curl-pipe-shell": curlPipeShell,
 	"reverse-shell": reverseShell,
 	"escapes-project": pathEscapesProject,
+	"nonliteral-argv0": nonliteralArgv0,
+	"fork-bomb": forkBomb,
+	"pipe-to-shell": pipeToShell,
 };
 
 export function getHandler(name: string): HandlerDefinition | undefined {

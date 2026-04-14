@@ -42,7 +42,7 @@ export const DEFAULT_FORBID: Rule[] = [
 		description: "fork bomb pattern",
 		kind: "bash",
 		severity: "forbid",
-		match: { argvPattern: ":\\(\\)\\{.*:\\|:&.*\\};:" },
+		match: { custom: "fork-bomb" },
 		reason: "Fork bomb pattern detected.",
 	},
 	{
@@ -62,12 +62,12 @@ export const DEFAULT_FORBID: Rule[] = [
 		reason: "Reverse-shell pattern detected.",
 	},
 	{
-		id: "forbid.variable-argv0",
-		description: "program name is a variable reference",
+		id: "forbid.nonliteral-argv0",
+		description: "program name is not a literal (variable, substitution, process-substitution)",
 		kind: "bash",
 		severity: "forbid",
-		match: { argvPattern: "^\\$" },
-		reason: "Program name from a variable cannot be statically verified.",
+		match: { custom: "nonliteral-argv0" },
+		reason: "Program name is not a literal — cannot be statically verified.",
 	},
 	{
 		id: "forbid.credential-read",
@@ -104,6 +104,14 @@ export const DEFAULT_FORBID: Rule[] = [
 ];
 
 export const DEFAULT_ASK: Rule[] = [
+	{
+		id: "ask.rm-rf",
+		description: "recursive rm",
+		kind: "bash",
+		severity: "ask",
+		match: { argv0: "rm", argvAny: ["-rf", "-fr", "--recursive"] },
+		reason: "Recursive delete requires approval.",
+	},
 	{
 		id: "ask.git-push-default",
 		description: "git push to default branch",
@@ -229,5 +237,13 @@ export const DEFAULT_ASK: Rule[] = [
 		severity: "ask",
 		match: { argv0: ["env"] },
 		reason: "env prefix can alter the PATH — approval required.",
+	},
+	{
+		id: "ask.pipe-to-shell",
+		description: "command piped into a shell interpreter",
+		kind: "bash",
+		severity: "ask",
+		match: { custom: "pipe-to-shell" },
+		reason: "Piping into a shell interpreter requires approval.",
 	},
 ];

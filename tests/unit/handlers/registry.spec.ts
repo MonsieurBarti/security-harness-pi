@@ -17,6 +17,9 @@ describe("handler registry — final", () => {
 		"curl-pipe-shell",
 		"reverse-shell",
 		"escapes-project",
+		"nonliteral-argv0",
+		"fork-bomb",
+		"pipe-to-shell",
 	];
 
 	for (const name of expected) {
@@ -27,7 +30,7 @@ describe("handler registry — final", () => {
 		});
 	}
 
-	it("listHandlers returns all 9 handlers", () => {
+	it("listHandlers returns all 12 handlers", () => {
 		const names = listHandlers();
 		for (const n of expected) {
 			expect(names).toContain(n);

@@ -30,7 +30,7 @@ describe("DEFAULT_FORBID", () => {
 			"forbid.fork-bomb",
 			"forbid.curl-pipe-shell",
 			"forbid.reverse-shell",
-			"forbid.variable-argv0",
+			"forbid.nonliteral-argv0",
 			"forbid.credential-read",
 			"forbid.system-write",
 			"forbid.path-escape-write",
@@ -61,6 +61,7 @@ describe("DEFAULT_ASK", () => {
 	it("ships the must-have ask rules", () => {
 		const ids = DEFAULT_ASK.map((r) => r.id);
 		const required = [
+			"ask.rm-rf",
 			"ask.git-push-default",
 			"ask.git-push-force",
 			"ask.git-merge",
@@ -75,6 +76,7 @@ describe("DEFAULT_ASK", () => {
 			"ask.net-download-exec",
 			"ask.dynamic-interpreter",
 			"ask.path-manip",
+			"ask.pipe-to-shell",
 		];
 		for (const id of required) expect(ids).toContain(id);
 	});
