@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesBash, parsePattern } from "../../../src/analyzers/pattern-parser.js";
+import { matchesBash, matchesPath, parsePattern } from "../../../src/analyzers/pattern-parser.js";
 import { __registerHandlerForTests } from "../../../src/handlers/index.js";
 import type { HandlerDefinition, SimpleCommand } from "../../../src/types.js";
 
@@ -293,5 +293,67 @@ describe("matchesBash — custom handler", () => {
 		const r = parsePattern("Bash(git push)@__test_args_check(release/*,hotfix/*)");
 		matchesBash(r, sc(["git", "push"]), [], "/cwd");
 		expect(received).toEqual(["release/*", "hotfix/*"]);
+	});
+});
+
+describe("matchesPath", () => {
+	it("matches relative globs against project-relative paths", () => {
+		const r = parsePattern("Write(.env*)");
+		expect(matchesPath(r, ".env", "/proj")).toBe(true);
+		expect(matchesPath(r, ".env.local", "/proj")).toBe(true);
+		expect(matchesPath(r, "src/app.ts", "/proj")).toBe(false);
+	});
+
+	it("does not match absolute path with a relative glob", () => {
+		const r = parsePattern("Write(.env*)");
+		expect(matchesPath(r, "/etc/.env", "/proj")).toBe(false);
+	});
+
+	it("matches tilde glob against home-rooted absolute path", () => {
+		const home = process.env.HOME ?? "/h";
+		const r = parsePattern("Read(~/.ssh/id_*)");
+		expect(matchesPath(r, `${home}/.ssh/id_rsa`, "/proj")).toBe(true);
+	});
+
+	it("dispatches to a custom handler when set", () => {
+		let receivedPath: string | undefined;
+		__registerHandlerForTests("__test_path_capture", {
+			match: (ctx) => {
+				receivedPath = ctx.simpleCommand.argv[0];
+				return true;
+			},
+		});
+		const r = parsePattern("Write(.env*)@__test_path_capture");
+		// The path "src/app.ts" doesn't match the .env* glob, so handler is consulted
+		expect(matchesPath(r, "src/app.ts", "/proj")).toBe(true);
+		expect(receivedPath).toBe("src/app.ts");
+	});
+
+	it("returns false when no path matches and no handler matches", () => {
+		__registerHandlerForTests("__test_path_no", { match: () => false });
+		const r = parsePattern("Write(this-does-not-exist-glob)@__test_path_no");
+		expect(matchesPath(r, "src/app.ts", "/proj")).toBe(false);
+	});
+
+	it("returns true when path matches even if handler would return false", () => {
+		__registerHandlerForTests("__test_path_no2", { match: () => false });
+		const r = parsePattern("Write(.env*)@__test_path_no2");
+		// Path matches; handler is short-circuited
+		expect(matchesPath(r, ".env", "/proj")).toBe(true);
+	});
+
+	it("fail-closes when the path-handler throws", () => {
+		__registerHandlerForTests("__test_path_throws", {
+			match: () => {
+				throw new Error("boom");
+			},
+		});
+		const r = parsePattern("Write(this-does-not-exist-glob)@__test_path_throws");
+		expect(matchesPath(r, "src/app.ts", "/proj")).toBe(true);
+	});
+
+	it("returns false for a non-path rule kind", () => {
+		const r = parsePattern("Bash(rm:*)");
+		expect(matchesPath(r, "src/app.ts", "/proj")).toBe(false);
 	});
 });

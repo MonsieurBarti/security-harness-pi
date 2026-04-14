@@ -1,5 +1,7 @@
+import { basename } from "node:path";
 import { getHandler } from "../handlers/index.js";
 import type { Rule, RuleKind, Severity, SimpleCommand } from "../types.js";
+import { PathAnalyzer } from "./path-analyzer.js";
 
 export function parsePattern(input: string, severity: Severity = "forbid"): Rule {
 	let src = input.trim();
@@ -222,4 +224,37 @@ function globToRegexSimple(glob: string): string {
 		.replace(/[-/\\^$+.()|[\]{}]/g, "\\$&")
 		.replace(/\*/g, ".*")
 		.replace(/\?/g, ".")}$`;
+}
+
+export function matchesPath(rule: Rule, path: string, cwd: string): boolean {
+	if (rule.kind !== "path-write" && rule.kind !== "path-read") return false;
+	const pa = new PathAnalyzer(cwd);
+
+	if (rule.paths && rule.paths.length > 0 && pa.matches(path, rule.paths)) {
+		return true;
+	}
+
+	if (rule.match?.custom) {
+		const def = getHandler(rule.match.custom);
+		if (!def) return false;
+		try {
+			return def.match({
+				cwd,
+				simpleCommand: {
+					argv: [path],
+					argvKinds: ["literal"],
+					argv0Basename: basename(path),
+					redirects: [],
+					source: "top",
+					raw: path,
+				},
+				allCommands: [],
+				args: rule.match.customArgs,
+			});
+		} catch {
+			return true;
+		}
+	}
+
+	return false;
 }
