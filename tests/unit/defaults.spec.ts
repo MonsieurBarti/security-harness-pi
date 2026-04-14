@@ -61,6 +61,7 @@ describe("DEFAULT_ASK", () => {
 	it("ships the must-have ask rules", () => {
 		const ids = DEFAULT_ASK.map((r) => r.id);
 		const required = [
+			"ask.rm-rf",
 			"ask.git-push-default",
 			"ask.git-push-force",
 			"ask.git-merge",

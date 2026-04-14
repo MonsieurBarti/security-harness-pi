@@ -105,6 +105,14 @@ export const DEFAULT_FORBID: Rule[] = [
 
 export const DEFAULT_ASK: Rule[] = [
 	{
+		id: "ask.rm-rf",
+		description: "recursive rm",
+		kind: "bash",
+		severity: "ask",
+		match: { argv0: "rm", argvAny: ["-rf", "-fr", "--recursive"] },
+		reason: "Recursive delete requires approval.",
+	},
+	{
 		id: "ask.git-push-default",
 		description: "git push to default branch",
 		kind: "bash",

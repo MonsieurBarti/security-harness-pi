@@ -54,18 +54,18 @@ describe("Group 2: quoting / escape", () => {
 	// but the target is "/tmp", which does NOT match the root pattern
 	// "(^|\s)(/|~|\$HOME)(\s|$)". The forbid.rm-rf-root rule only blocks rm at /, ~, $HOME.
 	// Fix: broaden the rm-rf rule to cover all paths (not just root), or change test targets to "/".
-	it.skip("'r''m' -rf /tmp", () => expectBlocked("'r''m' -rf /tmp"));
+	it("'r''m' -rf /tmp", () => expectBlocked("'r''m' -rf /tmp"));
 	// TODO(P6-fix): double-quote concatenation — same as above: argv0 decoded to "rm",
 	// target "/tmp" doesn't match the root-only argvPattern. Unmatched rule.
-	it.skip('"r""m" -rf /tmp', () => expectBlocked('"r""m" -rf /tmp'));
+	it('"r""m" -rf /tmp', () => expectBlocked('"r""m" -rf /tmp'));
 	it("backslash-escape: \\rm -rf /", () => expectBlocked("\\rm -rf /"));
 	// TODO(P6-fix): ANSI-C octal $'\162\155' — analyzer correctly decodes to argv0="rm",
 	// but target is "/tmp", not "/" or "~" or "$HOME". The forbid.rm-rf-root argvPattern
 	// doesn't match "/tmp". Unmatched rule — same root-pattern gap as above.
-	it.skip("ANSI-C octal $'\\162\\155' = rm", () => expectBlocked("$'\\162\\155' -rf /tmp"));
+	it("ANSI-C octal $'\\162\\155' = rm", () => expectBlocked("$'\\162\\155' -rf /tmp"));
 	// TODO(P6-fix): ANSI-C hex $'\x72\x6d' — same: argv0 decoded to "rm", target "/tmp"
 	// doesn't match root pattern. Unmatched rule.
-	it.skip("ANSI-C hex $'\\x72\\x6d' = rm", () => expectBlocked("$'\\x72\\x6d' -rf /tmp"));
+	it("ANSI-C hex $'\\x72\\x6d' = rm", () => expectBlocked("$'\\x72\\x6d' -rf /tmp"));
 });
 
 describe("Group 3: path-prefixed argv0", () => {
@@ -73,11 +73,11 @@ describe("Group 3: path-prefixed argv0", () => {
 	// argv0Basename="rm". Target "/tmp" does not match the argvPattern root guard
 	// "(^|\s)(/|~|\$HOME)(\s|$)". Unmatched rule — forbid.rm-rf-root only blocks
 	// rm at root paths, not arbitrary paths like /tmp.
-	it.skip("/bin/rm -rf /tmp", () => expectBlocked("/bin/rm -rf /tmp"));
+	it("/bin/rm -rf /tmp", () => expectBlocked("/bin/rm -rf /tmp"));
 	// TODO(P6-fix): /usr/bin/rm -rf /tmp — same as above. Unmatched rule.
-	it.skip("/usr/bin/rm -rf /tmp", () => expectBlocked("/usr/bin/rm -rf /tmp"));
+	it("/usr/bin/rm -rf /tmp", () => expectBlocked("/usr/bin/rm -rf /tmp"));
 	// TODO(P6-fix): ./bin/rm -rf /tmp — same as above. Unmatched rule.
-	it.skip("./bin/rm -rf /tmp", () => expectBlocked("./bin/rm -rf /tmp"));
+	it("./bin/rm -rf /tmp", () => expectBlocked("./bin/rm -rf /tmp"));
 });
 
 describe("Group 4: variable argv0", () => {
@@ -110,21 +110,21 @@ describe("Group 7: command substitution inside args", () => {
 	// a substitution-sourced command (argv0Basename="rm", source="substitution"). However
 	// the target is "/tmp", which does not match the root argvPattern in forbid.rm-rf-root.
 	// Unmatched rule — same root-path gap as Group 2/3.
-	it.skip("echo $(rm -rf /tmp)", () => expectBlocked("echo $(rm -rf /tmp)"));
+	it("echo $(rm -rf /tmp)", () => expectBlocked("echo $(rm -rf /tmp)"));
 	// TODO(P6-fix): echo `rm -rf /tmp` — same as above. Backtick substitution in arg
 	// position: rm is extracted correctly (source="substitution"), but "/tmp" doesn't
 	// match the root pattern. Unmatched rule.
-	it.skip("echo `rm -rf /tmp`", () => expectBlocked("echo `rm -rf /tmp`"));
+	it("echo `rm -rf /tmp`", () => expectBlocked("echo `rm -rf /tmp`"));
 });
 
 describe("Group 8: process substitution", () => {
 	// TODO(P6-fix): diff <(rm -rf /tmp) /dev/null — analyzer extracts "rm -rf /tmp"
 	// with source="process-substitution". argv0Basename="rm". Target "/tmp" does not
 	// match the root argvPattern. Unmatched rule — same root-path gap.
-	it.skip("diff <(rm -rf /tmp) /dev/null", () => expectBlocked("diff <(rm -rf /tmp) /dev/null"));
+	it("diff <(rm -rf /tmp) /dev/null", () => expectBlocked("diff <(rm -rf /tmp) /dev/null"));
 	// TODO(P6-fix): tee >(rm -rf /tmp) /dev/null — same: rm extracted from output
 	// process-substitution, target "/tmp" doesn't match root pattern. Unmatched rule.
-	it.skip("tee >(rm -rf /tmp) /dev/null", () => expectBlocked("tee >(rm -rf /tmp) /dev/null"));
+	it("tee >(rm -rf /tmp) /dev/null", () => expectBlocked("tee >(rm -rf /tmp) /dev/null"));
 });
 
 describe("Group 9: transparent wrappers", () => {
@@ -134,13 +134,13 @@ describe("Group 9: transparent wrappers", () => {
 	// (source="top") and "rm" (source="wrapper") are extracted. The rm command matches
 	// argv0Basename="rm" but target "/tmp" doesn't match the root argvPattern in
 	// forbid.rm-rf-root. Unmatched rule — root-path gap.
-	it.skip("nohup rm -rf /tmp", () => expectBlocked("nohup rm -rf /tmp"));
+	it("nohup rm -rf /tmp", () => expectBlocked("nohup rm -rf /tmp"));
 	// TODO(P6-fix): timeout 5 rm -rf /tmp — same: rm extracted correctly as source="wrapper",
 	// but "/tmp" doesn't match root argvPattern. Unmatched rule.
-	it.skip("timeout 5 rm -rf /tmp", () => expectBlocked("timeout 5 rm -rf /tmp"));
+	it("timeout 5 rm -rf /tmp", () => expectBlocked("timeout 5 rm -rf /tmp"));
 	// TODO(P6-fix): nice -n 10 rm -rf /tmp — same: rm extracted as source="wrapper",
 	// target "/tmp" doesn't match root argvPattern. Unmatched rule.
-	it.skip("nice -n 10 rm -rf /tmp", () => expectBlocked("nice -n 10 rm -rf /tmp"));
+	it("nice -n 10 rm -rf /tmp", () => expectBlocked("nice -n 10 rm -rf /tmp"));
 });
 
 describe("Group 10: pipe-to-shell", () => {
