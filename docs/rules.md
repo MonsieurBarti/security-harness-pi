@@ -63,7 +63,7 @@ All handlers are in a closed registry — you configure existing ones, you canno
 | `default-branch` | `Bash(git push)@default-branch` | push target equals the repo's default branch |
 | `branch` | `Bash(git push)@branch(release/*,!hotfix/*)` | push target matches a glob with negation |
 | `force` | `Bash(git push)@force` | `--force`, `-f`, or `--force-with-lease` |
-| `pkg-install` | `Bash(npm install:+)@pkg-install` | `npm/yarn/pnpm/bun` install/add with a package |
+| `pkg-install` | `Bash(npm install:+)@pkg-install` | Package install across ecosystems: npm/yarn/pnpm/bun/cargo/brew/go/gem/composer/poetry/uv/deno |
 | `pip-install` | `Bash(pip install:+)@pip-install` | `pip install <pkg>` excluding `-r`/`-e` |
 | `cargo-add` | `Bash(cargo add:*)@cargo-add` | `cargo add <pkg>` excluding `--dry-run` |
 | `curl-pipe-shell` | `Bash(curl:*)@curl-pipe-shell` | downloader → transitive pipe → shell |
@@ -108,7 +108,7 @@ See `src/defaults.ts` for the authoritative list. Summary:
 **Ask-first:**
 - `git push` to default branch, force push, merge, destructive git
 - Package publish (`npm/yarn/pnpm/bun publish`, `cargo publish`, `gh release create`)
-- Package install with a new dep (`npm install react`, `pip install flask`, `cargo add`)
+- Package install with a new dep (`npm/yarn/pnpm/bun install <pkg>`, `pip install <pkg>`, `cargo add`/`cargo install`, `brew install`, `go install <mod>`, `gem install`, `composer require`, `poetry add`, `uv add`/`uv pip install`, `deno install`/`deno add`)
 - `rm -rf <any target>` (even non-root)
 - Any command piped into a shell interpreter
 - Writes/reads of `.env*`, `*.pem`, `*.key`, `**/secrets/**`, `.github/workflows/**`

@@ -214,3 +214,17 @@ describe("Group 16: git push sensitive", () => {
 		}
 	});
 });
+
+describe("Group 17: extended package install", () => {
+	it("bun install react", () => expectBlocked("bun install react"));
+	it("bun i react", () => expectBlocked("bun i react"));
+	it("cargo install ripgrep", () => expectBlocked("cargo install ripgrep"));
+	it("brew install wget", () => expectBlocked("brew install wget"));
+	it("go install example.com/pkg@latest", () => expectBlocked("go install example.com/pkg@latest"));
+	it("gem install rails", () => expectBlocked("gem install rails"));
+	it("composer require pkg/name", () => expectBlocked("composer require symfony/http-foundation"));
+	it("poetry add flask", () => expectBlocked("poetry add flask"));
+	it("uv add requests", () => expectBlocked("uv add requests"));
+	it("uv pip install flask", () => expectBlocked("uv pip install flask"));
+	it("deno add npm:lodash", () => expectBlocked("deno add npm:lodash"));
+});

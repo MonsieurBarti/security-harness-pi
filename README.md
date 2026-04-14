@@ -5,7 +5,7 @@ Security harness for the [pi coding agent](https://github.com/mariozechner/pi-co
 ## What it does
 
 - **Hard-forbid**: `sudo`, `rm -rf /`, `curl | sh`, reverse shells, system-path writes, credential reads — blocked with no prompt.
-- **Ask-first**: `git push` to the default branch, force-push, `git merge`, `npm install <pkg>`, `rm -rf <any>`, writes/reads of `.env` / secrets / CI files, dynamic interpreter calls (`python -c`, `node -e`), any command piped into a shell.
+- **Ask-first**: `git push` to the default branch, force-push, `git merge`, package installs across ecosystems (npm/yarn/pnpm/bun/cargo/brew/go/gem/composer/poetry/uv/deno), `rm -rf <any>`, writes/reads of `.env` / secrets / CI files, dynamic interpreter calls (`python -c`, `node -e`), any command piped into a shell.
 - **Allow**: anything not matched by a rule.
 
 Commands are parsed into an AST and every simple-command inside pipes, `$(...)`, `eval`, `bash -c` is classified independently. Parse errors fail closed. 329 tests including a dedicated adversarial bypass suite.
