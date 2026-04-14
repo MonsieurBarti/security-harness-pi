@@ -19,8 +19,20 @@ export class PathAnalyzer {
 	matches(p: string, globs: string[]): boolean {
 		const abs = this.resolve(p);
 		const rel = relative(this.cwd, abs);
-		const expanded = globs.map((g) => (g.startsWith("~") ? g.replace(/^~(?=\/|$)/, homedir()) : g));
-		const matcher = picomatch(expanded, { dot: true });
-		return matcher(abs) || matcher(rel);
+		const insideProject = !rel.startsWith("..") && !isAbsolute(rel);
+
+		for (const glob of globs) {
+			const isAbsoluteGlob = glob.startsWith("/") || glob.startsWith("~");
+			const expanded =
+				isAbsoluteGlob && glob.startsWith("~") ? glob.replace(/^~(?=\/|$)/, homedir()) : glob;
+			const matcher = picomatch(expanded, { dot: true });
+			if (isAbsoluteGlob) {
+				if (matcher(abs)) return true;
+			} else {
+				// relative glob — only matches paths inside the project
+				if (insideProject && matcher(rel)) return true;
+			}
+		}
+		return false;
 	}
 }

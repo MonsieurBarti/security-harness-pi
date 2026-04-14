@@ -27,4 +27,30 @@ describe("PathAnalyzer", () => {
 		const home = process.env.HOME ?? "/home/u";
 		expect(pa.matches(`${home}/.ssh/id_rsa`, ["~/.ssh/id_*"])).toBe(true);
 	});
+
+	it("relative glob does not match path outside project root", () => {
+		const pa2 = new PathAnalyzer("/proj");
+		expect(pa2.matches("/etc/env", [".env*"])).toBe(false);
+	});
+
+	it("absolute glob matches absolute path inside project too", () => {
+		const pa2 = new PathAnalyzer("/proj");
+		expect(pa2.matches("/proj/.env", ["/proj/.env*"])).toBe(true);
+	});
+
+	it("relative glob matches relative-rendered path", () => {
+		const pa2 = new PathAnalyzer("/proj");
+		expect(pa2.matches("src/.env", [".env*", "src/.env*"])).toBe(true);
+	});
+
+	it("tilde glob matches home-rooted absolute path", () => {
+		const home = process.env.HOME ?? "/h";
+		const pa2 = new PathAnalyzer("/proj");
+		expect(pa2.matches(`${home}/.ssh/id_rsa`, ["~/.ssh/id_*"])).toBe(true);
+	});
+
+	it("tilde glob does NOT match a non-home absolute path", () => {
+		const pa2 = new PathAnalyzer("/proj");
+		expect(pa2.matches("/etc/passwd", ["~/.ssh/*"])).toBe(false);
+	});
 });

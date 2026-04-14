@@ -4,6 +4,10 @@ import { fileURLToPath } from "node:url";
 import Parser from "web-tree-sitter";
 import type { ArgvKind, BashAnalysis, CommandSource, Redirect, SimpleCommand } from "../types.js";
 
+const MAX_INPUT_BYTES = 64 * 1024; // 64 KB total input string
+const MAX_DEPTH = 16; // max nested re-parse depth
+const MAX_COMMANDS = 256; // max total SimpleCommands extracted
+
 const WASM_PATH = join(
 	dirname(fileURLToPath(import.meta.url)),
 	"..",
@@ -33,31 +37,47 @@ export class BashAnalyzer {
 	}
 
 	analyze(command: string): BashAnalysis {
-		const queue: { source: CommandSource; payload: string }[] = [
-			{ source: "top", payload: command },
+		if (command.length > MAX_INPUT_BYTES) {
+			return { commands: [], parseError: "command exceeds maximum size (64KB)" };
+		}
+
+		const queue: { source: CommandSource; payload: string; depth: number }[] = [
+			{ source: "top", payload: command, depth: 0 },
 		];
 		const out: SimpleCommand[] = [];
-		let parseError: string | undefined;
+		const err: { value: string | undefined } = { value: undefined };
 
 		while (queue.length > 0) {
 			const item = queue.shift();
 			if (item === undefined) break;
+
+			if (item.depth > MAX_DEPTH) {
+				err.value = "command nesting depth exceeds maximum (16)";
+				continue;
+			}
+
 			const tree = this.parser.parse(item.payload);
 			if (!tree) {
-				parseError = "tree-sitter returned null";
+				err.value = "tree-sitter returned null";
 				continue;
 			}
 			const root = tree.rootNode;
 			if (root.hasError) {
-				parseError = parseError ?? "syntax error in command";
+				err.value = err.value ?? "syntax error in command";
 				continue;
 			}
-			const nested: { source: CommandSource; payload: string }[] = [];
-			walk(root, out, nested, item.source);
+			const nested: { source: CommandSource; payload: string; depth: number }[] = [];
+			walk(root, out, nested, item.source, item.depth, err);
 			queue.push(...nested);
+
+			if (out.length > MAX_COMMANDS) {
+				err.value = "command produced too many sub-commands (>256)";
+				out.splice(MAX_COMMANDS);
+				break;
+			}
 		}
 
-		return parseError ? { commands: out, parseError } : { commands: out };
+		return err.value !== undefined ? { commands: out, parseError: err.value } : { commands: out };
 	}
 }
 
@@ -68,20 +88,22 @@ export class BashAnalyzer {
 function walkCommandSubstitutions(
 	node: Parser.SyntaxNode,
 	out: SimpleCommand[],
-	nested: { source: CommandSource; payload: string }[],
+	nested: { source: CommandSource; payload: string; depth: number }[],
 	source: CommandSource,
+	depth: number,
+	err: { value: string | undefined },
 ): void {
 	for (const child of node.children) {
 		if (!child) continue;
 		if (child.type === "command_substitution") {
-			// Inner commands from $(...) are tagged "substitution"
-			walk(child, out, nested, "substitution");
+			// Inner commands from $(...) are tagged "substitution"; bump depth
+			walk(child, out, nested, "substitution", depth + 1, err);
 		} else if (child.type === "process_substitution") {
-			// Inner commands from <(...) or >(...) are tagged "process-substitution"
-			walk(child, out, nested, "process-substitution");
+			// Inner commands from <(...) or >(...) are tagged "process-substitution"; bump depth
+			walk(child, out, nested, "process-substitution", depth + 1, err);
 		} else if (child.type === "string" || child.type === "command_name") {
 			// command_substitution may appear inside a string or command_name node
-			walkCommandSubstitutions(child, out, nested, source);
+			walkCommandSubstitutions(child, out, nested, source, depth, err);
 		}
 	}
 }
@@ -90,10 +112,47 @@ function extractRedirectsFromNode(node: Parser.SyntaxNode): Redirect[] {
 	const redirects: Redirect[] = [];
 	for (const child of node.namedChildren) {
 		if (!child || child.type !== "file_redirect") continue;
-		const opNode = child.child(0);
-		const tgt = child.namedChild(0);
-		const op = opNode?.text as Redirect["op"] | undefined;
-		if (op && tgt) redirects.push({ op, target: decodeNode(tgt) });
+		// A file_redirect may have an optional leading file_descriptor (e.g. "2" in "2>&1"),
+		// followed by the operator token (not named), followed by an optional target.
+		//
+		// Shapes:
+		//   "> word"       — children: [">", word]
+		//   ">> word"      — children: [">>", word]
+		//   "2>&1"         — children: [file_descriptor("2"), ">&", number("1")]
+		//   ">& word"      — children: [">&", word]
+		//   "<& num"       — children: ["<&", number]
+		//
+		// Strategy: if the first child is a file_descriptor, prepend its text to the
+		// operator token and use the remaining named child (after file_descriptor) as target.
+		// Otherwise take the first anonymous token as op and first named child as target.
+
+		let op: string | undefined;
+		let target: string | undefined;
+
+		const firstChild = child.child(0);
+		if (firstChild?.type === "file_descriptor") {
+			// fd-dup form: fd + op_token + [target]
+			const fdText = firstChild.text;
+			// Find the anonymous operator token (first child after file_descriptor)
+			const opToken = child.child(1);
+			const opText = opToken?.text;
+			if (opText) {
+				op = fdText + opText; // e.g. "2>&"
+			}
+			// Target: named children that are not file_descriptor
+			const tgt = child.namedChildren.find((c) => c && c.type !== "file_descriptor") ?? undefined;
+			target = tgt ? decodeNode(tgt) : "";
+		} else {
+			// Normal form: op_token + target
+			const opToken = firstChild;
+			op = opToken?.text;
+			const tgt = child.namedChild(0);
+			target = tgt ? decodeNode(tgt) : undefined;
+		}
+
+		if (op !== undefined && target !== undefined) {
+			redirects.push({ op, target });
+		}
 	}
 	return redirects;
 }
@@ -101,25 +160,32 @@ function extractRedirectsFromNode(node: Parser.SyntaxNode): Redirect[] {
 function walk(
 	node: Parser.SyntaxNode,
 	out: SimpleCommand[],
-	nested: { source: CommandSource; payload: string }[],
+	nested: { source: CommandSource; payload: string; depth: number }[],
 	source: CommandSource,
+	depth: number,
+	err: { value: string | undefined },
 ): void {
+	// Guard: if depth exceeds limit, record the error and stop descending.
+	if (depth > MAX_DEPTH) {
+		err.value = "command nesting depth exceeds maximum (16)";
+		return;
+	}
+
 	if (node.type === "redirected_statement") {
 		// Find the inner command child and collect file_redirect siblings.
 		const outerRedirects = extractRedirectsFromNode(node);
 		for (const child of node.namedChildren) {
 			if (!child) continue;
 			if (child.type === "command") {
-				const sc = extractSimpleCommand(child, nested, source);
-				const wrapped = popPendingWrapped();
-				if (sc) {
-					sc.redirects.push(...outerRedirects);
-					out.push(sc);
-					if (wrapped) out.push(wrapped);
+				const result = extractSimpleCommand(child, nested, source, depth);
+				if (result) {
+					result.cmd.redirects.push(...outerRedirects);
+					out.push(result.cmd);
+					if (result.wrapped) out.push(result.wrapped);
 				}
-				walkCommandSubstitutions(child, out, nested, source);
+				walkCommandSubstitutions(child, out, nested, source, depth, err);
 			} else if (child.type !== "file_redirect") {
-				walk(child, out, nested, source);
+				walk(child, out, nested, source, depth, err);
 			}
 		}
 		return;
@@ -129,16 +195,34 @@ function walk(
 		for (const child of node.namedChildren) {
 			if (!child) continue;
 			if (child.type === "command") {
-				const sc = extractSimpleCommand(child, nested, source);
-				const wrapped = popPendingWrapped();
-				if (sc) {
-					out.push(sc);
-					pipeCmds.push(sc);
-					if (wrapped) out.push(wrapped);
+				const result = extractSimpleCommand(child, nested, source, depth);
+				if (result) {
+					out.push(result.cmd);
+					pipeCmds.push(result.cmd);
+					if (result.wrapped) out.push(result.wrapped);
 				}
-				walkCommandSubstitutions(child, out, nested, source);
+				walkCommandSubstitutions(child, out, nested, source, depth, err);
+			} else if (child.type === "redirected_statement") {
+				// A redirected_statement inside a pipeline (e.g. "cat foo > out | grep bar")
+				// — extract the inner command with its redirects and add it to the pipeline.
+				const outerRedirects = extractRedirectsFromNode(child);
+				for (const innerChild of child.namedChildren) {
+					if (!innerChild) continue;
+					if (innerChild.type === "command") {
+						const result = extractSimpleCommand(innerChild, nested, source, depth);
+						if (result) {
+							result.cmd.redirects.push(...outerRedirects);
+							out.push(result.cmd);
+							pipeCmds.push(result.cmd);
+							if (result.wrapped) out.push(result.wrapped);
+						}
+						walkCommandSubstitutions(innerChild, out, nested, source, depth, err);
+					} else if (innerChild.type !== "file_redirect") {
+						walk(innerChild, out, nested, source, depth, err);
+					}
+				}
 			} else {
-				walk(child, out, nested, source);
+				walk(child, out, nested, source, depth, err);
 			}
 		}
 		let prev: SimpleCommand | undefined;
@@ -152,31 +236,41 @@ function walk(
 		return;
 	}
 	if (node.type === "command") {
-		const sc = extractSimpleCommand(node, nested, source);
-		const wrapped = popPendingWrapped();
-		if (sc) out.push(sc);
-		if (wrapped) out.push(wrapped);
+		const result = extractSimpleCommand(node, nested, source, depth);
+		if (result) {
+			out.push(result.cmd);
+			if (result.wrapped) out.push(result.wrapped);
+		}
 		// Also descend into command_substitution nodes within this command's args.
-		walkCommandSubstitutions(node, out, nested, source);
+		walkCommandSubstitutions(node, out, nested, source, depth, err);
 		return;
 	}
 	if (node.type === "command_substitution") {
-		// Descend directly into command_substitution so inner commands are extracted.
+		// Descend directly into command_substitution; bump depth to track nesting.
+		const nextDepth = depth + 1;
+		if (nextDepth > MAX_DEPTH) {
+			err.value = "command nesting depth exceeds maximum (16)";
+			return;
+		}
 		for (const child of node.namedChildren) {
-			if (child) walk(child, out, nested, source);
+			if (child) walk(child, out, nested, source, nextDepth, err);
 		}
 		return;
 	}
 	if (node.type === "process_substitution") {
-		// Descend into <(...) and >(...) process substitutions.
-		// Inner commands are tagged "process-substitution".
+		// Descend into <(...) and >(...) process substitutions; bump depth.
+		const nextDepth = depth + 1;
+		if (nextDepth > MAX_DEPTH) {
+			err.value = "command nesting depth exceeds maximum (16)";
+			return;
+		}
 		for (const child of node.namedChildren) {
-			if (child) walk(child, out, nested, "process-substitution");
+			if (child) walk(child, out, nested, "process-substitution", nextDepth, err);
 		}
 		return;
 	}
 	for (const child of node.namedChildren) {
-		if (child) walk(child, out, nested, source);
+		if (child) walk(child, out, nested, source, depth, err);
 	}
 }
 
@@ -239,9 +333,10 @@ function computeArgv0Basename(argv0: string, kind: ArgvKind): string {
 
 function extractSimpleCommand(
 	node: Parser.SyntaxNode,
-	nested: { source: CommandSource; payload: string }[],
+	nested: { source: CommandSource; payload: string; depth: number }[],
 	source: CommandSource,
-): SimpleCommand | null {
+	depth: number,
+): { cmd: SimpleCommand; wrapped?: SimpleCommand } | null {
 	const argv: string[] = [];
 	const argvKinds: ArgvKind[] = [];
 	const redirects: Redirect[] = [];
@@ -297,7 +392,7 @@ function extractSimpleCommand(
 	if (SHELL_COMMANDS.has(argv0Basename)) {
 		const payload = findShellCPayload(argv);
 		if (payload !== undefined) {
-			nested.push({ source: "shell-c", payload });
+			nested.push({ source: "shell-c", payload, depth: depth + 1 });
 		}
 	}
 
@@ -307,38 +402,22 @@ function extractSimpleCommand(
 	if (argv0Basename === "eval" && argv.length > 1) {
 		const allLiteral = argvKinds.slice(1).every((k) => k === "literal");
 		if (allLiteral) {
-			nested.push({ source: "eval", payload: argv.slice(1).join(" ") });
+			nested.push({ source: "eval", payload: argv.slice(1).join(" "), depth: depth + 1 });
 		}
 	}
 
-	const sc: SimpleCommand = { argv, argvKinds, argv0Basename, redirects, source, raw: node.text };
+	const cmd: SimpleCommand = { argv, argvKinds, argv0Basename, redirects, source, raw: node.text };
 
 	// H3: extract wrapped SimpleCommand for transparent wrappers.
 	// Only attempt when argv0 is a literal (so we know what wrapper we're dealing with).
 	// Wrappers are best-effort — if we can't identify the inner command, we skip.
-	// We stash the result in _pendingWrapped; walk() picks it up immediately after.
+	let wrapped: SimpleCommand | undefined;
 	if (argv0Kind === "literal") {
-		const wrapped = extractWrappedCommand(sc);
-		if (wrapped !== null) {
-			_pendingWrapped = wrapped;
-		}
+		const w = extractWrappedCommand(cmd);
+		if (w !== null) wrapped = w;
 	}
 
-	return sc;
-}
-
-/**
- * Module-level stash for a wrapper-extracted SimpleCommand.
- * extractSimpleCommand() sets this when it detects a wrapper; the walk() caller
- * immediately reads and clears it before doing anything else.
- * This is safe in single-threaded Node.js.
- */
-let _pendingWrapped: SimpleCommand | null = null;
-
-function popPendingWrapped(): SimpleCommand | null {
-	const w = _pendingWrapped;
-	_pendingWrapped = null;
-	return w;
+	return wrapped !== undefined ? { cmd, wrapped } : { cmd };
 }
 
 /**

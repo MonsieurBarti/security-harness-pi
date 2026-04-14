@@ -27,7 +27,7 @@ export interface Rule {
 }
 
 export interface Redirect {
-	op: ">" | ">>" | "<" | "<<" | "&>" | ">&";
+	op: string; // the literal redirect operator as it appears in source (">", ">>", "2>&1", ">&", etc.)
 	target: string;
 }
 
