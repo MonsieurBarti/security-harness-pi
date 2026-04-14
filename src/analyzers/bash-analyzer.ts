@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Parser from "web-tree-sitter";
-import type { BashAnalysis, Redirect, SimpleCommand } from "../types.js";
+import type { ArgvKind, BashAnalysis, CommandSource, Redirect, SimpleCommand } from "../types.js";
 
 const WASM_PATH = join(
 	dirname(fileURLToPath(import.meta.url)),
@@ -11,6 +11,15 @@ const WASM_PATH = join(
 	"tree-sitter-bash.wasm",
 );
 
+/**
+ * BashAnalyzer parses bash command strings and extracts SimpleCommand metadata.
+ *
+ * Concurrency: this class wraps a single web-tree-sitter Parser instance.
+ * `analyze()` is synchronous and not re-entrant. In single-threaded Node
+ * (the only environment pi runs in), per-call invocations are sequential
+ * and safe. Do NOT share an instance across worker threads. `create()`
+ * is async only because Parser.init() requires loading WASM.
+ */
 export class BashAnalyzer {
 	private constructor(private parser: Parser) {}
 
@@ -24,14 +33,16 @@ export class BashAnalyzer {
 	}
 
 	analyze(command: string): BashAnalysis {
-		const queue: string[] = [command];
+		const queue: { source: CommandSource; payload: string }[] = [
+			{ source: "top", payload: command },
+		];
 		const out: SimpleCommand[] = [];
 		let parseError: string | undefined;
 
 		while (queue.length > 0) {
-			const src = queue.shift();
-			if (src === undefined) break;
-			const tree = this.parser.parse(src);
+			const item = queue.shift();
+			if (item === undefined) break;
+			const tree = this.parser.parse(item.payload);
 			if (!tree) {
 				parseError = "tree-sitter returned null";
 				continue;
@@ -41,8 +52,8 @@ export class BashAnalyzer {
 				parseError = parseError ?? "syntax error in command";
 				continue;
 			}
-			const nested: string[] = [];
-			walk(root, out, nested);
+			const nested: { source: CommandSource; payload: string }[] = [];
+			walk(root, out, nested, item.source);
 			queue.push(...nested);
 		}
 
@@ -54,15 +65,16 @@ export class BashAnalyzer {
 function walkCommandSubstitutions(
 	node: Parser.SyntaxNode,
 	out: SimpleCommand[],
-	nested: string[],
+	nested: { source: CommandSource; payload: string }[],
+	source: CommandSource,
 ): void {
 	for (const child of node.children) {
 		if (!child) continue;
 		if (child.type === "command_substitution") {
-			walk(child, out, nested);
+			walk(child, out, nested, source);
 		} else if (child.type === "string") {
 			// command_substitution may appear inside a string node
-			walkCommandSubstitutions(child, out, nested);
+			walkCommandSubstitutions(child, out, nested, source);
 		}
 	}
 }
@@ -79,21 +91,26 @@ function extractRedirectsFromNode(node: Parser.SyntaxNode): Redirect[] {
 	return redirects;
 }
 
-function walk(node: Parser.SyntaxNode, out: SimpleCommand[], nested: string[]): void {
+function walk(
+	node: Parser.SyntaxNode,
+	out: SimpleCommand[],
+	nested: { source: CommandSource; payload: string }[],
+	source: CommandSource,
+): void {
 	if (node.type === "redirected_statement") {
 		// Find the inner command child and collect file_redirect siblings.
 		const outerRedirects = extractRedirectsFromNode(node);
 		for (const child of node.namedChildren) {
 			if (!child) continue;
 			if (child.type === "command") {
-				const sc = extractSimpleCommand(child, nested);
+				const sc = extractSimpleCommand(child, nested, source);
 				if (sc) {
 					sc.redirects.push(...outerRedirects);
 					out.push(sc);
 				}
-				walkCommandSubstitutions(child, out, nested);
+				walkCommandSubstitutions(child, out, nested, source);
 			} else if (child.type !== "file_redirect") {
-				walk(child, out, nested);
+				walk(child, out, nested, source);
 			}
 		}
 		return;
@@ -103,14 +120,14 @@ function walk(node: Parser.SyntaxNode, out: SimpleCommand[], nested: string[]): 
 		for (const child of node.namedChildren) {
 			if (!child) continue;
 			if (child.type === "command") {
-				const sc = extractSimpleCommand(child, nested);
+				const sc = extractSimpleCommand(child, nested, source);
 				if (sc) {
 					out.push(sc);
 					pipeCmds.push(sc);
 				}
-				walkCommandSubstitutions(child, out, nested);
+				walkCommandSubstitutions(child, out, nested, source);
 			} else {
-				walk(child, out, nested);
+				walk(child, out, nested, source);
 			}
 		}
 		let prev: SimpleCommand | undefined;
@@ -124,37 +141,81 @@ function walk(node: Parser.SyntaxNode, out: SimpleCommand[], nested: string[]): 
 		return;
 	}
 	if (node.type === "command") {
-		const sc = extractSimpleCommand(node, nested);
+		const sc = extractSimpleCommand(node, nested, source);
 		if (sc) out.push(sc);
 		// Also descend into command_substitution nodes within this command's args.
-		walkCommandSubstitutions(node, out, nested);
+		walkCommandSubstitutions(node, out, nested, source);
 		return;
 	}
 	if (node.type === "command_substitution") {
 		// Descend directly into command_substitution so inner commands are extracted.
 		for (const child of node.namedChildren) {
-			if (child) walk(child, out, nested);
+			if (child) walk(child, out, nested, source);
 		}
 		return;
 	}
 	for (const child of node.namedChildren) {
-		if (child) walk(child, out, nested);
+		if (child) walk(child, out, nested, source);
 	}
 }
 
 const SHELL_COMMANDS = new Set(["bash", "sh", "zsh", "dash"]);
 
-function extractSimpleCommand(node: Parser.SyntaxNode, nested: string[]): SimpleCommand | null {
+/**
+ * Maps a tree-sitter node type to an ArgvKind.
+ *
+ * Mapping used:
+ *   - "simple_expansion" ($X)  → "variable"
+ *   - "expansion" (${FOO})     → "variable"
+ *   - "command_substitution"   → "substitution"
+ *   - everything else (word, string, raw_string, concatenation,
+ *     number, ansi_c_string, command_name) → "literal"
+ */
+function nodeTypeToArgvKind(nodeType: string): ArgvKind {
+	if (nodeType === "simple_expansion" || nodeType === "expansion") {
+		return "variable";
+	}
+	if (nodeType === "command_substitution") {
+		return "substitution";
+	}
+	return "literal";
+}
+
+function computeArgv0Basename(argv0: string, kind: ArgvKind): string {
+	if (kind === "literal" && argv0.includes("/")) {
+		const idx = argv0.lastIndexOf("/");
+		return argv0.slice(idx + 1);
+	}
+	return argv0;
+}
+
+function extractSimpleCommand(
+	node: Parser.SyntaxNode,
+	nested: { source: CommandSource; payload: string }[],
+	source: CommandSource,
+): SimpleCommand | null {
 	const argv: string[] = [];
+	const argvKinds: ArgvKind[] = [];
 	const redirects: Redirect[] = [];
+
 	for (const child of node.namedChildren) {
 		const type = child.type;
 		if (type === "concatenation") {
+			// For concatenations, inspect the first named child to determine kind.
+			// If any child is a variable/substitution the whole token is considered
+			// its most derived kind; otherwise literal.
+			let kind: ArgvKind = "literal";
 			const parts: string[] = [];
 			for (const sub of child.namedChildren) {
-				if (sub) parts.push(unquote(sub.text));
+				if (sub) {
+					const subKind = nodeTypeToArgvKind(sub.type);
+					if (subKind === "substitution") kind = "substitution";
+					else if (subKind === "variable" && kind === "literal") kind = "variable";
+					parts.push(unquote(sub.text));
+				}
 			}
 			argv.push(parts.join(""));
+			argvKinds.push(kind);
 			continue;
 		}
 		if (
@@ -162,23 +223,31 @@ function extractSimpleCommand(node: Parser.SyntaxNode, nested: string[]): Simple
 			type === "word" ||
 			type === "string" ||
 			type === "raw_string" ||
-			type === "number"
+			type === "number" ||
+			type === "simple_expansion" ||
+			type === "expansion" ||
+			type === "command_substitution"
 		) {
 			argv.push(unquote(child.text));
+			argvKinds.push(nodeTypeToArgvKind(type));
 		}
 	}
 	if (argv.length === 0) return null;
 
+	const argv0 = argv[0] ?? "";
+	const argv0Kind = argvKinds[0] ?? "literal";
+	const argv0Basename = computeArgv0Basename(argv0, argv0Kind);
+
 	// Detect shell -c <payload> and queue payload for re-parsing.
-	if (SHELL_COMMANDS.has(argv[0] ?? "") && argv.includes("-c")) {
+	if (SHELL_COMMANDS.has(argv0) && argv.includes("-c")) {
 		const cIdx = argv.indexOf("-c");
 		const payload = argv[cIdx + 1];
 		if (payload !== undefined) {
-			nested.push(payload);
+			nested.push({ source: "shell-c", payload });
 		}
 	}
 
-	return { argv, redirects, raw: node.text };
+	return { argv, argvKinds, argv0Basename, redirects, source, raw: node.text };
 }
 
 function unquote(s: string): string {

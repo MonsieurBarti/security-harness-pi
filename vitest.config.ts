@@ -4,7 +4,7 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: "node",
-		include: ["tests/**/*.spec.ts", "tests/**/*.test.ts"],
+		include: ["tests/**/*.spec.ts"],
 		exclude: ["node_modules", "dist", ".worktrees"],
 		coverage: {
 			provider: "v8",
@@ -13,7 +13,6 @@ export default defineConfig({
 				"node_modules",
 				"dist",
 				"tests/**/*.spec.ts",
-				"tests/**/*.test.ts",
 				"tests/fixtures/**",
 				"**/*.d.ts",
 				"vitest.config.ts",

@@ -108,3 +108,51 @@ describe("BashAnalyzer — redirects and errors", () => {
 		expect(r.parseError).toBeDefined();
 	});
 });
+
+describe("BashAnalyzer — argvKinds", () => {
+	it("tags literal argv0 as 'literal'", async () => {
+		const r = await analyzer.analyze("rm -rf /tmp");
+		expect(r.commands[0]?.argvKinds[0]).toBe("literal");
+	});
+
+	it("tags all plain tokens as 'literal'", async () => {
+		const r = await analyzer.analyze("rm -rf /tmp");
+		expect(r.commands[0]?.argvKinds).toEqual(["literal", "literal", "literal"]);
+	});
+});
+
+describe("BashAnalyzer — argv0Basename", () => {
+	it("computes argv0Basename for /bin/rm", async () => {
+		const r = await analyzer.analyze("/bin/rm -rf /tmp");
+		expect(r.commands[0]?.argv0Basename).toBe("rm");
+	});
+
+	it("argv0Basename equals argv[0] for plain rm", async () => {
+		const r = await analyzer.analyze("rm -rf /tmp");
+		expect(r.commands[0]?.argv0Basename).toBe("rm");
+	});
+
+	it("computes argv0Basename for deeply nested path", async () => {
+		const r = await analyzer.analyze("/usr/local/bin/node --version");
+		expect(r.commands[0]?.argv0Basename).toBe("node");
+	});
+});
+
+describe("BashAnalyzer — source tracking", () => {
+	it("emits source='top' for outermost commands", async () => {
+		const r = await analyzer.analyze("rm -rf /tmp");
+		expect(r.commands[0]?.source).toBe("top");
+	});
+
+	it("emits source='shell-c' for bash -c payload", async () => {
+		const r = await analyzer.analyze('bash -c "rm -rf /tmp"');
+		const inner = r.commands.find((c) => c.argv[0] === "rm");
+		expect(inner?.source).toBe("shell-c");
+	});
+
+	it("emits source='top' for the outer bash command itself", async () => {
+		const r = await analyzer.analyze('bash -c "rm -rf /tmp"');
+		const outer = r.commands.find((c) => c.argv[0] === "bash");
+		expect(outer?.source).toBe("top");
+	});
+});
