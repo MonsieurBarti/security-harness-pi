@@ -13,13 +13,14 @@
 	},
 	"files": [
 		"dist",
+		"src/wasm",
 		"README.md",
 		"LICENSE"
 	],
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"dev": "tsc -p tsconfig.build.json --watch",
-		"test": "vitest run",
+		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"lint": "biome check .",
@@ -63,6 +64,10 @@
 			"./dist/index.js"
 		]
 	},
+	"dependencies": {
+		"web-tree-sitter": "^0.23.0",
+		"picomatch": "^4.0.2"
+	},
 	"peerDependencies": {
 		"@mariozechner/pi-coding-agent": "*",
 		"@mariozechner/pi-ai": "*",
@@ -70,6 +75,7 @@
 		"@sinclair/typebox": "*"
 	},
 	"devDependencies": {
+		"@types/picomatch": "^3.0.1",
 		"@biomejs/biome": "^1.9.4",
 		"@commitlint/cli": "^19.8.0",
 		"@commitlint/config-conventional": "^19.8.0",
