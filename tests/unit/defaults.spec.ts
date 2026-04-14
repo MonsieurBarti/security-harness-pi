@@ -30,7 +30,7 @@ describe("DEFAULT_FORBID", () => {
 			"forbid.fork-bomb",
 			"forbid.curl-pipe-shell",
 			"forbid.reverse-shell",
-			"forbid.variable-argv0",
+			"forbid.nonliteral-argv0",
 			"forbid.credential-read",
 			"forbid.system-write",
 			"forbid.path-escape-write",

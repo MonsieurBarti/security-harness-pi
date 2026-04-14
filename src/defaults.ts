@@ -62,12 +62,12 @@ export const DEFAULT_FORBID: Rule[] = [
 		reason: "Reverse-shell pattern detected.",
 	},
 	{
-		id: "forbid.variable-argv0",
-		description: "program name is a variable reference",
+		id: "forbid.nonliteral-argv0",
+		description: "program name is not a literal (variable, substitution, process-substitution)",
 		kind: "bash",
 		severity: "forbid",
-		match: { argvPattern: "^\\$" },
-		reason: "Program name from a variable cannot be statically verified.",
+		match: { custom: "nonliteral-argv0" },
+		reason: "Program name is not a literal — cannot be statically verified.",
 	},
 	{
 		id: "forbid.credential-read",

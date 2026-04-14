@@ -94,7 +94,7 @@ describe("Group 5: substitution argv0", () => {
 	// backtick `…` argv0. The inner "echo" command is extracted from substitution but
 	// never flagged. Fix: extend forbid.variable-argv0 to also match argv0 starting with
 	// a backtick, or add a rule for substitution-kind argv0 regardless of character form.
-	it.skip("`echo rm` -rf /", () => expectBlocked("`echo rm` -rf /"));
+	it("`echo rm` -rf /", () => expectBlocked("`echo rm` -rf /"));
 });
 
 describe("Group 6: shell re-parse", () => {

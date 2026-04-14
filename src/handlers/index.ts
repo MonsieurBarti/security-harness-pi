@@ -4,6 +4,7 @@ import { curlPipeShell } from "./curl-pipe-shell.js";
 import { gitPushBranch } from "./git-push-branch.js";
 import { gitPushDefaultBranch } from "./git-push-default-branch.js";
 import { gitPushForce } from "./git-push-force.js";
+import { nonliteralArgv0 } from "./nonliteral-argv0.js";
 import { npmInstallWithPkg } from "./npm-install-with-pkg.js";
 import { pathEscapesProject } from "./path-escapes-project.js";
 import { pipInstallWithPkg } from "./pip-install-with-pkg.js";
@@ -19,6 +20,7 @@ const registry: Record<string, HandlerDefinition> = {
 	"curl-pipe-shell": curlPipeShell,
 	"reverse-shell": reverseShell,
 	"escapes-project": pathEscapesProject,
+	"nonliteral-argv0": nonliteralArgv0,
 };
 
 export function getHandler(name: string): HandlerDefinition | undefined {
