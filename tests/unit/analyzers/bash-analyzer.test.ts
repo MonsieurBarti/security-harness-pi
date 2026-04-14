@@ -91,3 +91,20 @@ describe("BashAnalyzer — nested", () => {
 		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
 	});
 });
+
+describe("BashAnalyzer — redirects and errors", () => {
+	it("captures a > redirect", async () => {
+		const r = await analyzer.analyze("echo hi > /tmp/out");
+		expect(r.commands[0]?.redirects).toEqual([{ op: ">", target: "/tmp/out" }]);
+	});
+
+	it("captures >> redirect", async () => {
+		const r = await analyzer.analyze("echo hi >> /tmp/out");
+		expect(r.commands[0]?.redirects[0]?.op).toBe(">>");
+	});
+
+	it("reports parseError on unterminated quote", async () => {
+		const r = await analyzer.analyze("rm 'unclosed");
+		expect(r.parseError).toBeDefined();
+	});
+});

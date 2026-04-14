@@ -67,7 +67,37 @@ function walkCommandSubstitutions(
 	}
 }
 
+function extractRedirectsFromNode(node: Parser.SyntaxNode): Redirect[] {
+	const redirects: Redirect[] = [];
+	for (const child of node.namedChildren) {
+		if (!child || child.type !== "file_redirect") continue;
+		const opNode = child.child(0);
+		const tgt = child.namedChild(0);
+		const op = opNode?.text as Redirect["op"] | undefined;
+		if (op && tgt) redirects.push({ op, target: unquote(tgt.text) });
+	}
+	return redirects;
+}
+
 function walk(node: Parser.SyntaxNode, out: SimpleCommand[], nested: string[]): void {
+	if (node.type === "redirected_statement") {
+		// Find the inner command child and collect file_redirect siblings.
+		const outerRedirects = extractRedirectsFromNode(node);
+		for (const child of node.namedChildren) {
+			if (!child) continue;
+			if (child.type === "command") {
+				const sc = extractSimpleCommand(child, nested);
+				if (sc) {
+					sc.redirects.push(...outerRedirects);
+					out.push(sc);
+				}
+				walkCommandSubstitutions(child, out, nested);
+			} else if (child.type !== "file_redirect") {
+				walk(child, out, nested);
+			}
+		}
+		return;
+	}
 	if (node.type === "pipeline") {
 		const pipeCmds: SimpleCommand[] = [];
 		for (const child of node.namedChildren) {
@@ -116,7 +146,7 @@ const SHELL_COMMANDS = new Set(["bash", "sh", "zsh", "dash"]);
 
 function extractSimpleCommand(node: Parser.SyntaxNode, nested: string[]): SimpleCommand | null {
 	const argv: string[] = [];
-	const redirects: Redirect[] = []; // TODO Task 6: populate from file_redirect children
+	const redirects: Redirect[] = [];
 	for (const child of node.namedChildren) {
 		const type = child.type;
 		if (type === "concatenation") {
