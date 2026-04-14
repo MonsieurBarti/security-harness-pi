@@ -10,23 +10,29 @@ import { PolicyEngine } from "./services/policy-engine.js";
 import { SessionLog } from "./services/session-log.js";
 import type { ResolvedConfig } from "./types.js";
 
+type State =
+	| { kind: "uninitialized" }
+	| {
+			kind: "ready";
+			resolved: ResolvedConfig;
+			engine: PolicyEngine;
+			log: SessionLog;
+			analyzer: BashAnalyzer;
+	  }
+	| { kind: "crashed"; reason: string };
+
 export default async function securityHarness(pi: ExtensionAPI): Promise<void> {
-	let crashed = false;
-	let crashReason = "";
-	let resolved: ResolvedConfig | null = null;
-	let engine: PolicyEngine | null = null;
-	let log: SessionLog | null = null;
-	let analyzer: BashAnalyzer | null = null;
+	let state: State = { kind: "uninitialized" };
 
 	const globalDir = join(homedir(), ".pi", "agent");
 
 	pi.on("session_start", async (_event, ctx) => {
 		try {
-			analyzer = await BashAnalyzer.create();
-			resolved = await loadConfig({ cwd: ctx.cwd, globalDir });
-			engine = new PolicyEngine(resolved);
-			// ExtensionAPI.appendEntry is compatible with PiAppend — pass pi directly.
-			log = new SessionLog(pi);
+			const analyzer = await BashAnalyzer.create();
+			const resolved = await loadConfig({ cwd: ctx.cwd, globalDir });
+			const engine = new PolicyEngine(resolved);
+			const log = new SessionLog(pi as unknown as { appendEntry: (n: string, d: unknown) => void });
+			state = { kind: "ready", resolved, engine, log, analyzer };
 			if (resolved.warnings.length) {
 				for (const w of resolved.warnings) {
 					ctx.ui.notify(`security-harness: ${w}`, "warning");
@@ -34,59 +40,51 @@ export default async function securityHarness(pi: ExtensionAPI): Promise<void> {
 			}
 			ctx.ui.setStatus(
 				"security-harness",
-				// ctx.ui.theme is Theme; fg(ThemeColor, string) returns string.
-				// "accent" is a valid ThemeColor per the installed package types.
 				ctx.ui.theme.fg(
 					"accent",
 					`\u{1F6E1} ${resolved.forbiddenRules.length}F/${resolved.askRules.length}A`,
 				),
 			);
 		} catch (e) {
-			crashed = true;
-			crashReason = (e as Error).message;
+			const reason = (e as Error).message;
+			state = { kind: "crashed", reason };
 			ctx.ui.notify(
-				`security-harness failed to initialize: ${crashReason}. All bash/write/edit/read calls will be blocked for this session.`,
+				`security-harness failed to initialize: ${reason}. All bash/write/edit/read calls will be blocked for this session.`,
 				"error",
 			);
 		}
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (crashed) {
-			if (
-				event.toolName === "bash" ||
-				event.toolName === "write" ||
-				event.toolName === "edit" ||
-				event.toolName === "read"
-			) {
-				return { block: true, reason: `security-harness crashed at init: ${crashReason}` };
-			}
-			return undefined;
-		}
-		// Not yet initialized (init race with session_start)
-		if (!resolved || !engine || !log || !analyzer) {
-			if (
-				event.toolName === "bash" ||
-				event.toolName === "write" ||
-				event.toolName === "edit" ||
-				event.toolName === "read"
-			) {
-				return {
-					block: true,
-					reason: "security-harness not yet initialized — retry after session_start completes",
-				};
-			}
-			return undefined;
-		}
-		if (!resolved.enabled) return undefined; // explicit global opt-out
+		const shouldBlockGatedTools =
+			event.toolName === "bash" ||
+			event.toolName === "write" ||
+			event.toolName === "edit" ||
+			event.toolName === "read";
 
-		// makeToolCallHandler returns an (event, ctx) => Promise<{block:true,reason:string}|undefined>.
-		// HookCtx.ui.notify takes (msg: string, level?: string) — ExtensionUIContext.notify
-		// takes (message: string, type?: "info"|"warning"|"error") which is a subtype, so
-		// passing ctx.ui directly is safe. Same for HookCtx.ui.confirm.
-		// ToolCallEvent.input is typed per tool (e.g. BashToolInput) while HookEvent.input
-		// is Record<string,unknown>. Cast event to satisfy the internal HookEvent interface.
-		const handler = makeToolCallHandler({ analyzer, engine, log });
+		if (state.kind === "crashed") {
+			return shouldBlockGatedTools
+				? { block: true, reason: `security-harness crashed at init: ${state.reason}` }
+				: undefined;
+		}
+
+		if (state.kind === "uninitialized") {
+			return shouldBlockGatedTools
+				? {
+						block: true,
+						reason: "security-harness not yet initialized — retry after session_start completes",
+					}
+				: undefined;
+		}
+
+		// state.kind === "ready"
+		if (!state.resolved.enabled) return undefined;
+
+		const handler = makeToolCallHandler({
+			analyzer: state.analyzer,
+			engine: state.engine,
+			log: state.log,
+		});
 		return handler(
 			event as { toolName: string; input: Record<string, unknown> },
 			// ExtensionContext satisfies HookCtx: it has hasUI, cwd, and ui.{confirm,notify}.
@@ -94,26 +92,34 @@ export default async function securityHarness(pi: ExtensionAPI): Promise<void> {
 		);
 	});
 
-	// pi.registerCommand expects handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>
-	// Our internal Command.handler takes (args: string[], ctx: UiCtx) => Promise<void>.
-	// Bridge: split the raw args string at the boundary; pass ctx.ui which satisfies UiCtx.ui.
 	const statusCmd = makeStatusCommand(() => {
-		if (!resolved || !log) throw new Error("security-harness not initialized");
-		return { resolved, log };
+		if (state.kind !== "ready") throw new Error("security-harness not initialized");
+		return { resolved: state.resolved, log: state.log };
 	});
 
 	pi.registerCommand("security-status", {
 		description: statusCmd.description,
 		handler: async (rawArgs, ctx) => {
 			return statusCmd.handler(rawArgs ? rawArgs.split(/\s+/) : [], {
-				ui: { notify: (msg, level) => ctx.ui.notify(msg, level as "info" | "warning" | "error") },
+				ui: { notify: (msg, level) => ctx.ui.notify(msg, level) },
 			});
 		},
 	});
 
 	const reloadCmd = makeReloadCommand(async () => {
-		resolved = await loadConfig({ cwd: process.cwd(), globalDir });
-		engine = new PolicyEngine(resolved);
+		const resolved = await loadConfig({ cwd: process.cwd(), globalDir });
+		if (state.kind === "ready") {
+			// swap in place: keep analyzer + log, refresh resolved + engine
+			state = {
+				kind: "ready",
+				resolved,
+				engine: new PolicyEngine(resolved),
+				analyzer: state.analyzer,
+				log: state.log,
+			};
+		} else {
+			throw new Error("security-harness not initialized yet");
+		}
 		return { warnings: resolved.warnings };
 	});
 
@@ -121,7 +127,7 @@ export default async function securityHarness(pi: ExtensionAPI): Promise<void> {
 		description: reloadCmd.description,
 		handler: async (rawArgs, ctx) => {
 			return reloadCmd.handler(rawArgs ? rawArgs.split(/\s+/) : [], {
-				ui: { notify: (msg, level) => ctx.ui.notify(msg, level as "info" | "warning" | "error") },
+				ui: { notify: (msg, level) => ctx.ui.notify(msg, level) },
 			});
 		},
 	});
