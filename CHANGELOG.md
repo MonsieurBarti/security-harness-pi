@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/MonsieurBarti/security-harness-pi/compare/security-harness-pi-v0.1.0...security-harness-pi-v0.1.1) (2026-04-14)
+
+
+### Documentation
+
+* align readme with sibling tff extensions ([605c161](https://github.com/MonsieurBarti/security-harness-pi/commit/605c1615366ab267decf9d8064d9c74e51ba3a36))
+
 ## 0.1.0 (2026-04-14)
 
 
