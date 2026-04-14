@@ -37,14 +37,37 @@ export class BashAnalyzer {
 }
 
 function walk(node: Parser.SyntaxNode, out: SimpleCommand[]): void {
+	if (node.type === "pipeline") {
+		const pipeCmds: SimpleCommand[] = [];
+		for (const child of node.namedChildren) {
+			if (!child) continue;
+			if (child.type === "command") {
+				const sc = extractSimpleCommand(child);
+				if (sc) {
+					out.push(sc);
+					pipeCmds.push(sc);
+				}
+			} else {
+				walk(child, out);
+			}
+		}
+		let prev: SimpleCommand | undefined;
+		for (const cmd of pipeCmds) {
+			if (prev) {
+				prev.pipeNext = cmd;
+				cmd.pipePrev = prev;
+			}
+			prev = cmd;
+		}
+		return;
+	}
 	if (node.type === "command") {
 		const sc = extractSimpleCommand(node);
 		if (sc) out.push(sc);
-		// TODO Task 5: descend into command_substitution / string children before returning
 		return;
 	}
 	for (const child of node.namedChildren) {
-		walk(child, out);
+		if (child) walk(child, out);
 	}
 }
 
