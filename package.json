@@ -22,7 +22,7 @@
 		"dev": "tsc -p tsconfig.build.json --watch",
 		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage",
+		"test:coverage": "vitest run --coverage --passWithNoTests",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"check": "biome check .",
@@ -75,7 +75,7 @@
 		"@sinclair/typebox": "*"
 	},
 	"devDependencies": {
-		"@types/picomatch": "^3.0.1",
+		"@types/picomatch": "^4.0.0",
 		"@biomejs/biome": "^1.9.4",
 		"@commitlint/cli": "^19.8.0",
 		"@commitlint/config-conventional": "^19.8.0",
