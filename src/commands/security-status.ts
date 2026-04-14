@@ -1,18 +1,10 @@
 import type { SessionLog } from "../services/session-log.js";
 import type { ResolvedConfig } from "../types.js";
+import type { Command } from "./types.js";
 
 interface State {
 	resolved: ResolvedConfig;
 	log: SessionLog;
-}
-
-interface UiCtx {
-	ui: { notify: (msg: string, level?: string) => void };
-}
-
-export interface Command {
-	description: string;
-	handler: (args: string[], ctx: UiCtx) => Promise<void>;
 }
 
 export function makeStatusCommand(getState: () => State): Command {

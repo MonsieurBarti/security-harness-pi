@@ -1,4 +1,5 @@
 import type { BashAnalyzer } from "../analyzers/bash-analyzer.js";
+import type { NotifyLevel } from "../commands/types.js";
 import type { PolicyEngine } from "../services/policy-engine.js";
 import type { SessionLog } from "../services/session-log.js";
 import type { Verdict } from "../types.js";
@@ -19,7 +20,7 @@ interface HookCtx {
 	cwd: string;
 	ui: {
 		confirm: (title: string, body?: string) => Promise<boolean>;
-		notify: (msg: string, level?: string) => void;
+		notify: (msg: string, level?: NotifyLevel) => void;
 	};
 }
 

@@ -1,13 +1,6 @@
-interface UiCtx {
-	ui: { notify: (msg: string, level?: string) => void };
-}
+import type { Command } from "./types.js";
 
 type Reload = () => Promise<{ warnings: string[] }>;
-
-export interface Command {
-	description: string;
-	handler: (args: string[], ctx: UiCtx) => Promise<void>;
-}
 
 export function makeReloadCommand(reload: Reload): Command {
 	return {
