@@ -85,11 +85,9 @@ export default async function securityHarness(pi: ExtensionAPI): Promise<void> {
 			engine: state.engine,
 			log: state.log,
 		});
-		return handler(
-			event as { toolName: string; input: Record<string, unknown> },
-			// ExtensionContext satisfies HookCtx: it has hasUI, cwd, and ui.{confirm,notify}.
-			ctx as unknown as Parameters<typeof handler>[1],
-		);
+		// ctx.ui.confirm signature differs (pi requires message: string, HookCtx allows body?: string);
+		// a single cast is sufficient — no double as-unknown-as needed.
+		return handler(event, ctx as Parameters<typeof handler>[1]);
 	});
 
 	const statusCmd = makeStatusCommand(() => {
