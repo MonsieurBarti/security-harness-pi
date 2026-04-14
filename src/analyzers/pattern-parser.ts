@@ -25,7 +25,7 @@ export function parsePattern(input: string, severity: Severity = "forbid"): Rule
 	if (atIdx !== -1) {
 		const handlerPart = src.slice(atIdx + 1);
 		src = src.slice(0, atIdx);
-		const m = /^([a-z0-9-]+)(?:\(([^)]*)\))?$/i.exec(handlerPart);
+		const m = /^([a-z0-9_-]+)(?:\(([^)]*)\))?$/i.exec(handlerPart);
 		if (!m) throw new Error(`invalid handler suffix in pattern "${input}": ${handlerPart}`);
 		custom = m[1] as string;
 		const argString = m[2];
