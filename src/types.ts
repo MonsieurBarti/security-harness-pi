@@ -32,7 +32,7 @@ export interface Redirect {
 }
 
 // Discriminator for individual argv tokens.
-export type ArgvKind = "literal" | "variable" | "substitution";
+export type ArgvKind = "literal" | "variable" | "substitution" | "process-substitution";
 
 // Where a SimpleCommand was extracted from. Drives later policy decisions
 // (e.g. eval'd commands cannot be statically trusted).

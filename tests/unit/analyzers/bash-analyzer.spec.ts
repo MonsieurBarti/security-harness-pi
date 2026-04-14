@@ -232,3 +232,90 @@ describe("BashAnalyzer — C4-C6: AST-aware decodeNode", () => {
 		expect(r.commands[0]?.argv[0]).toBe("\nat");
 	});
 });
+
+describe("BashAnalyzer — H1: process substitution", () => {
+	it("walks <(...) process substitution", async () => {
+		const r = await analyzer.analyze("diff <(rm -rf /tmp) /dev/null");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("diff");
+		expect(names).toContain("rm");
+		const inner = r.commands.find((c) => c.argv[0] === "rm");
+		expect(inner?.source).toBe("process-substitution");
+	});
+
+	it("walks >(...) process substitution", async () => {
+		const r = await analyzer.analyze("tee >(cat > /tmp/log) /dev/null");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("cat");
+	});
+
+	it("tags process_substitution argv with kind 'process-substitution'", async () => {
+		const r = await analyzer.analyze("diff <(echo a) <(echo b)");
+		const outer = r.commands.find((c) => c.argv[0] === "diff");
+		// both args should be process-substitution
+		expect(outer?.argvKinds.slice(1)).toEqual(["process-substitution", "process-substitution"]);
+	});
+});
+
+describe("BashAnalyzer — H3: transparent wrappers", () => {
+	it("extracts wrapped command from env VAR=val cmd args", async () => {
+		const r = await analyzer.analyze("env FOO=bar rm -rf /tmp");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("env");
+		expect(names).toContain("rm");
+		const wrapped = r.commands.find((c) => c.argv[0] === "rm");
+		expect(wrapped?.source).toBe("wrapper");
+		expect(wrapped?.argv0Basename).toBe("rm");
+	});
+
+	it("extracts wrapped command from env -i cmd", async () => {
+		const r = await analyzer.analyze("env -i rm -rf /tmp");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("extracts wrapped command from timeout", async () => {
+		const r = await analyzer.analyze("timeout 5 rm -rf /tmp");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("extracts wrapped command from nohup", async () => {
+		const r = await analyzer.analyze("nohup rm -rf /tmp");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("extracts wrapped command from nice -n 10 cmd", async () => {
+		const r = await analyzer.analyze("nice -n 10 rm -rf /tmp");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("does NOT extract a wrapper when no inner command identifiable", async () => {
+		const r = await analyzer.analyze("env --help");
+		// only env itself, no wrapped command
+		expect(r.commands.map((c) => c.argv[0])).toEqual(["env"]);
+	});
+});
+
+describe("BashAnalyzer — H5: shell -c flag clusters", () => {
+	it("re-parses bash -lic 'payload'", async () => {
+		const r = await analyzer.analyze("bash -lic 'rm -rf /tmp'");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("rm");
+		const inner = r.commands.find((c) => c.argv[0] === "rm");
+		expect(inner?.source).toBe("shell-c");
+	});
+
+	it("re-parses bash -cl 'payload'", async () => {
+		const r = await analyzer.analyze("bash -cl 'rm -rf /tmp'");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("re-parses sh -ic 'payload'", async () => {
+		const r = await analyzer.analyze("sh -ic 'rm -rf /tmp'");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+
+	it("does NOT re-parse bash -li (no c)", async () => {
+		const r = await analyzer.analyze("bash -li ./script.sh");
+		expect(r.commands.map((c) => c.argv[0])).toEqual(["bash"]);
+	});
+});
