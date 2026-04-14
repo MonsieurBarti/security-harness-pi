@@ -17,11 +17,11 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
+		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/wasm', 'dist/wasm', {recursive:true})\"",
 		"dev": "tsc -p tsconfig.build.json --watch",
-		"test": "vitest run",
+		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage",
+		"test:coverage": "vitest run --coverage --passWithNoTests",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"check": "biome check .",
@@ -63,6 +63,10 @@
 			"./dist/index.js"
 		]
 	},
+	"dependencies": {
+		"web-tree-sitter": "^0.23.0",
+		"picomatch": "^4.0.2"
+	},
 	"peerDependencies": {
 		"@mariozechner/pi-coding-agent": "*",
 		"@mariozechner/pi-ai": "*",
@@ -73,11 +77,12 @@
 		"@biomejs/biome": "^1.9.4",
 		"@commitlint/cli": "^19.8.0",
 		"@commitlint/config-conventional": "^19.8.0",
-		"@sinclair/typebox": "^0.34.0",
-		"@mariozechner/pi-coding-agent": "latest",
 		"@mariozechner/pi-ai": "latest",
+		"@mariozechner/pi-coding-agent": "latest",
 		"@mariozechner/pi-tui": "latest",
+		"@sinclair/typebox": "^0.34.0",
 		"@types/node": "^22.0.0",
+		"@types/picomatch": "^4.0.0",
 		"@vitest/coverage-v8": "^2.1.0",
 		"lefthook": "^2.1.5",
 		"typescript": "^5.7.0",
