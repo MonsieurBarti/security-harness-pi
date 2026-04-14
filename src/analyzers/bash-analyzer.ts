@@ -23,7 +23,7 @@ export class BashAnalyzer {
 		return new BashAnalyzer(parser);
 	}
 
-	async analyze(command: string): Promise<BashAnalysis> {
+	analyze(command: string): BashAnalysis {
 		const tree = this.parser.parse(command);
 		if (!tree) return { commands: [], parseError: "tree-sitter returned null" };
 		const root = tree.rootNode;
@@ -40,6 +40,7 @@ function walk(node: Parser.SyntaxNode, out: SimpleCommand[]): void {
 	if (node.type === "command") {
 		const sc = extractSimpleCommand(node);
 		if (sc) out.push(sc);
+		// TODO Task 5: descend into command_substitution / string children before returning
 		return;
 	}
 	for (const child of node.namedChildren) {
@@ -49,13 +50,20 @@ function walk(node: Parser.SyntaxNode, out: SimpleCommand[]): void {
 
 function extractSimpleCommand(node: Parser.SyntaxNode): SimpleCommand | null {
 	const argv: string[] = [];
-	const redirects: Redirect[] = [];
+	const redirects: Redirect[] = []; // TODO Task 6: populate from file_redirect children
 	for (const child of node.namedChildren) {
 		const type = child.type;
+		if (type === "concatenation") {
+			const parts: string[] = [];
+			for (const sub of child.namedChildren) {
+				if (sub) parts.push(unquote(sub.text));
+			}
+			argv.push(parts.join(""));
+			continue;
+		}
 		if (
 			type === "command_name" ||
 			type === "word" ||
-			type === "concatenation" ||
 			type === "string" ||
 			type === "raw_string" ||
 			type === "number"

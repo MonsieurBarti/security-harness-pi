@@ -20,3 +20,15 @@ describe("BashAnalyzer — plain", () => {
 		expect(r.commands[0]?.raw).toBe("ls -la");
 	});
 });
+
+describe("BashAnalyzer — concatenation", () => {
+	it("joins concatenated single-quoted parts", async () => {
+		const r = await analyzer.analyze("echo 'x''y'");
+		expect(r.commands[0]?.argv).toEqual(["echo", "xy"]);
+	});
+
+	it("joins mixed-quote concatenations", async () => {
+		const r = await analyzer.analyze("echo 'x'\"y\"");
+		expect(r.commands[0]?.argv).toEqual(["echo", "xy"]);
+	});
+});

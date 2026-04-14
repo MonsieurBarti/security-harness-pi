@@ -18,7 +18,7 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
+		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/wasm', 'dist/wasm', {recursive:true})\"",
 		"dev": "tsc -p tsconfig.build.json --watch",
 		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest",
@@ -86,7 +86,6 @@
 		"@types/picomatch": "^4.0.0",
 		"@vitest/coverage-v8": "^2.1.0",
 		"lefthook": "^2.1.5",
-		"tree-sitter-bash": "0.23.3",
 		"typescript": "^5.7.0",
 		"vitest": "^2.1.0"
 	}
