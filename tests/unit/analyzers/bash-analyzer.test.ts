@@ -64,3 +64,30 @@ describe("BashAnalyzer — compound", () => {
 		expect(r.commands.map((c) => c.argv[0])).toEqual(["cd", "rm"]);
 	});
 });
+
+describe("BashAnalyzer — nested", () => {
+	it("descends into command substitution", async () => {
+		const r = await analyzer.analyze('echo "$(rm -rf /tmp)"');
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("echo");
+		expect(names).toContain("rm");
+	});
+
+	it("descends into backticks", async () => {
+		const r = await analyzer.analyze("echo `rm -rf /tmp`");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("rm");
+	});
+
+	it("re-parses the string passed to bash -c", async () => {
+		const r = await analyzer.analyze('bash -c "rm -rf /tmp/foo"');
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("bash");
+		expect(names).toContain("rm");
+	});
+
+	it("re-parses the string passed to sh -c", async () => {
+		const r = await analyzer.analyze("sh -c 'ls && rm -rf /tmp'");
+		expect(r.commands.map((c) => c.argv[0])).toContain("rm");
+	});
+});

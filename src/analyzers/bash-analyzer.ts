@@ -24,31 +24,63 @@ export class BashAnalyzer {
 	}
 
 	analyze(command: string): BashAnalysis {
-		const tree = this.parser.parse(command);
-		if (!tree) return { commands: [], parseError: "tree-sitter returned null" };
-		const root = tree.rootNode;
-		if (root.hasError) {
-			return { commands: [], parseError: "syntax error in command" };
+		const queue: string[] = [command];
+		const out: SimpleCommand[] = [];
+		let parseError: string | undefined;
+
+		while (queue.length > 0) {
+			const src = queue.shift();
+			if (src === undefined) break;
+			const tree = this.parser.parse(src);
+			if (!tree) {
+				parseError = "tree-sitter returned null";
+				continue;
+			}
+			const root = tree.rootNode;
+			if (root.hasError) {
+				parseError = parseError ?? "syntax error in command";
+				continue;
+			}
+			const nested: string[] = [];
+			walk(root, out, nested);
+			queue.push(...nested);
 		}
-		const commands: SimpleCommand[] = [];
-		walk(root, commands);
-		return { commands };
+
+		return parseError ? { commands: out, parseError } : { commands: out };
 	}
 }
 
-function walk(node: Parser.SyntaxNode, out: SimpleCommand[]): void {
+/** Recursively find command_substitution nodes within a command node's children and walk them. */
+function walkCommandSubstitutions(
+	node: Parser.SyntaxNode,
+	out: SimpleCommand[],
+	nested: string[],
+): void {
+	for (const child of node.children) {
+		if (!child) continue;
+		if (child.type === "command_substitution") {
+			walk(child, out, nested);
+		} else if (child.type === "string") {
+			// command_substitution may appear inside a string node
+			walkCommandSubstitutions(child, out, nested);
+		}
+	}
+}
+
+function walk(node: Parser.SyntaxNode, out: SimpleCommand[], nested: string[]): void {
 	if (node.type === "pipeline") {
 		const pipeCmds: SimpleCommand[] = [];
 		for (const child of node.namedChildren) {
 			if (!child) continue;
 			if (child.type === "command") {
-				const sc = extractSimpleCommand(child);
+				const sc = extractSimpleCommand(child, nested);
 				if (sc) {
 					out.push(sc);
 					pipeCmds.push(sc);
 				}
+				walkCommandSubstitutions(child, out, nested);
 			} else {
-				walk(child, out);
+				walk(child, out, nested);
 			}
 		}
 		let prev: SimpleCommand | undefined;
@@ -62,16 +94,27 @@ function walk(node: Parser.SyntaxNode, out: SimpleCommand[]): void {
 		return;
 	}
 	if (node.type === "command") {
-		const sc = extractSimpleCommand(node);
+		const sc = extractSimpleCommand(node, nested);
 		if (sc) out.push(sc);
+		// Also descend into command_substitution nodes within this command's args.
+		walkCommandSubstitutions(node, out, nested);
+		return;
+	}
+	if (node.type === "command_substitution") {
+		// Descend directly into command_substitution so inner commands are extracted.
+		for (const child of node.namedChildren) {
+			if (child) walk(child, out, nested);
+		}
 		return;
 	}
 	for (const child of node.namedChildren) {
-		if (child) walk(child, out);
+		if (child) walk(child, out, nested);
 	}
 }
 
-function extractSimpleCommand(node: Parser.SyntaxNode): SimpleCommand | null {
+const SHELL_COMMANDS = new Set(["bash", "sh", "zsh", "dash"]);
+
+function extractSimpleCommand(node: Parser.SyntaxNode, nested: string[]): SimpleCommand | null {
 	const argv: string[] = [];
 	const redirects: Redirect[] = []; // TODO Task 6: populate from file_redirect children
 	for (const child of node.namedChildren) {
@@ -95,6 +138,16 @@ function extractSimpleCommand(node: Parser.SyntaxNode): SimpleCommand | null {
 		}
 	}
 	if (argv.length === 0) return null;
+
+	// Detect shell -c <payload> and queue payload for re-parsing.
+	if (SHELL_COMMANDS.has(argv[0] ?? "") && argv.includes("-c")) {
+		const cIdx = argv.indexOf("-c");
+		const payload = argv[cIdx + 1];
+		if (payload !== undefined) {
+			nested.push(payload);
+		}
+	}
+
 	return { argv, redirects, raw: node.text };
 }
 
