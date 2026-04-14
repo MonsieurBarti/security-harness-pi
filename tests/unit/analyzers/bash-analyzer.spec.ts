@@ -156,3 +156,79 @@ describe("BashAnalyzer — source tracking", () => {
 		expect(outer?.source).toBe("top");
 	});
 });
+
+describe("BashAnalyzer — C1: eval re-parse", () => {
+	it("re-parses an eval string payload", async () => {
+		const r = await analyzer.analyze("eval 'rm -rf /tmp'");
+		const names = r.commands.map((c) => c.argv[0]);
+		expect(names).toContain("eval");
+		expect(names).toContain("rm");
+		const innerRm = r.commands.find((c) => c.argv[0] === "rm");
+		expect(innerRm?.source).toBe("eval");
+	});
+
+	it("does not re-parse eval when payload contains a variable", async () => {
+		const r = await analyzer.analyze("eval $cmd");
+		// The eval still appears, but no inner rm/etc — payload is opaque
+		expect(r.commands.map((c) => c.argv[0])).toEqual(["eval"]);
+	});
+});
+
+describe("BashAnalyzer — C2: argv0Basename edge cases", () => {
+	it("argv0Basename handles ./scripts/foo.sh", async () => {
+		const r = await analyzer.analyze("./scripts/foo.sh arg1");
+		expect(r.commands[0]?.argv0Basename).toBe("foo.sh");
+	});
+
+	it("argv0Basename leaves $X as-is (not literal)", async () => {
+		const r = await analyzer.analyze("$X -rf /");
+		// argv[0] is "$X"; argv0Basename should equal argv[0] since it's not a literal
+		expect(r.commands[0]?.argvKinds[0]).toBe("variable");
+		expect(r.commands[0]?.argv0Basename).toBe(r.commands[0]?.argv[0]);
+	});
+});
+
+describe("BashAnalyzer — C3: substitution as argv0", () => {
+	it("tags $(...) at argv0 as 'substitution' and extracts inner", async () => {
+		const r = await analyzer.analyze("$(echo rm) -rf /");
+		// outer command has argv0Kind = substitution
+		const outer = r.commands.find((c) => c.source === "top");
+		expect(outer?.argvKinds[0]).toBe("substitution");
+		// inner echo extracted from substitution
+		const inner = r.commands.find((c) => c.argv[0] === "echo");
+		expect(inner?.source).toBe("substitution");
+	});
+});
+
+describe("BashAnalyzer — C4-C6: AST-aware decodeNode", () => {
+	it("decodes 'r''m' concatenation as 'rm'", async () => {
+		const r = await analyzer.analyze("'r''m' -rf /tmp");
+		expect(r.commands[0]?.argv[0]).toBe("rm");
+	});
+
+	it('decodes "r""m" concatenation as \'rm\'', async () => {
+		const r = await analyzer.analyze('"r""m" -rf /tmp');
+		expect(r.commands[0]?.argv[0]).toBe("rm");
+	});
+
+	it("decodes c\\at backslash-escape word", async () => {
+		const r = await analyzer.analyze("c\\at /etc/passwd");
+		expect(r.commands[0]?.argv[0]).toBe("cat");
+	});
+
+	it("decodes $'\\143at' ansi-c octal", async () => {
+		const r = await analyzer.analyze("$'\\143at' /etc/passwd");
+		// \143 octal = 99 decimal = 'c'
+		expect(r.commands[0]?.argv[0]).toBe("cat");
+	});
+
+	it("decodes $'\\x63at' ansi-c hex", async () => {
+		const r = await analyzer.analyze("$'\\x63at' /etc/passwd");
+		expect(r.commands[0]?.argv[0]).toBe("cat");
+	});
+
+	it("decodes $'\\nat' ansi-c escape", async () => {
+		const r = await analyzer.analyze("$'\\nat' /etc/passwd");
+		expect(r.commands[0]?.argv[0]).toBe("\nat");
+	});
+});
