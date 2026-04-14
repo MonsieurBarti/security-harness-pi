@@ -115,4 +115,30 @@ describe("loadConfig", () => {
 		expect(r.enabled).toBe(false);
 		expect(r.mode).toBe("warn");
 	});
+
+	it("ignores project-level enabled=false with warning", async () => {
+		const proj = join(tmp, ".pi");
+		mkdirSync(proj, { recursive: true });
+		writeFileSync(join(proj, "security-harness.json"), JSON.stringify({ enabled: false }));
+		const r = await loadConfig({ cwd: tmp, globalDir: join(tmp, "no-global") });
+		expect(r.enabled).toBe(true);
+		expect(r.warnings.some((w) => w.includes("project-level 'enabled'"))).toBe(true);
+	});
+
+	it("ignores project-level mode=warn with warning", async () => {
+		const proj = join(tmp, ".pi");
+		mkdirSync(proj, { recursive: true });
+		writeFileSync(join(proj, "security-harness.json"), JSON.stringify({ mode: "warn" }));
+		const r = await loadConfig({ cwd: tmp, globalDir: join(tmp, "no-global") });
+		expect(r.mode).toBe("enforce");
+		expect(r.warnings.some((w) => w.includes("project-level 'mode'"))).toBe(true);
+	});
+
+	it("global enabled=false is still honored", async () => {
+		const g = join(tmp, "g");
+		mkdirSync(g, { recursive: true });
+		writeFileSync(join(g, "security-harness.json"), JSON.stringify({ enabled: false }));
+		const r = await loadConfig({ cwd: tmp, globalDir: g });
+		expect(r.enabled).toBe(false);
+	});
 });

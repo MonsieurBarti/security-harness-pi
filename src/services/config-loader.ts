@@ -68,6 +68,14 @@ export async function loadConfig(opts: LoadOpts): Promise<ResolvedConfig> {
 	if (projectCfg?.disable?.length) {
 		warnings.push("project-level disable is ignored — edit the global config to relax defaults");
 	}
+	if (projectCfg?.enabled !== undefined) {
+		warnings.push(
+			"project-level 'enabled' is ignored — edit the global config to disable the harness",
+		);
+	}
+	if (projectCfg?.mode !== undefined) {
+		warnings.push("project-level 'mode' is ignored — edit the global config to change mode");
+	}
 	if (projectCfg?.forbid) {
 		forbidden.push(...normalizeList(projectCfg.forbid, "forbid", warnings));
 	}
@@ -83,8 +91,8 @@ export async function loadConfig(opts: LoadOpts): Promise<ResolvedConfig> {
 	forbidden = dedupKeepLast(forbidden);
 	ask = dedupKeepLast(ask);
 
-	const enabled = globalCfg?.enabled ?? projectCfg?.enabled ?? true;
-	const mode = globalCfg?.mode ?? projectCfg?.mode ?? "enforce";
+	const enabled = globalCfg?.enabled ?? true;
+	const mode = globalCfg?.mode ?? "enforce";
 
 	return {
 		enabled,
