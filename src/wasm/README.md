@@ -3,9 +3,9 @@
 Vendored grammar for the bash AST parser used by `BashAnalyzer`.
 
 - **Source:** https://github.com/tree-sitter/tree-sitter-bash
-- **Version:** unknown (downloaded via /releases/latest/ on 2026-04-14)
+- **Version:** 0.23.3 (ABI 14, compatible with web-tree-sitter ^0.23)
 - **Loader:** `web-tree-sitter` (see `dependencies` in package.json)
-- **SHA-256:** `8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a`
+- **SHA-256:** `d1844429a58620f306b6f42aebe92298243ca8120cd833a3ab5d87c7a2e7b9fd`
 
 To rebuild from source:
 ```bash
