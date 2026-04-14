@@ -39,10 +39,13 @@ export function makeToolCallHandler(
 }
 
 async function handleBash(event: HookEvent, ctx: HookCtx, deps: Deps): Promise<HookReturn> {
-	const command = String(event.input.command ?? "");
-	const analysis = deps.analyzer.analyze(command);
+	const raw = event.input.command;
+	if (typeof raw !== "string") {
+		return { block: true, reason: "bash 'command' input is missing or not a string" };
+	}
+	const analysis = deps.analyzer.analyze(raw);
 	const verdict = deps.engine.classifyBash(analysis, ctx.cwd);
-	return runVerdict("bash", verdict, command, ctx, deps);
+	return runVerdict("bash", verdict, raw, ctx, deps);
 }
 
 async function handlePath(
@@ -51,10 +54,12 @@ async function handlePath(
 	ctx: HookCtx,
 	deps: Deps,
 ): Promise<HookReturn> {
-	const path = String(event.input.path ?? "");
-	if (!path) return undefined;
-	const verdict = deps.engine.classifyPath(op, path, ctx.cwd);
-	return runVerdict(event.toolName, verdict, path, ctx, deps);
+	const raw = event.input.path;
+	if (typeof raw !== "string") {
+		return { block: true, reason: `${event.toolName} 'path' input is missing or not a string` };
+	}
+	const verdict = deps.engine.classifyPath(op, raw, ctx.cwd);
+	return runVerdict(event.toolName, verdict, raw, ctx, deps);
 }
 
 async function runVerdict(

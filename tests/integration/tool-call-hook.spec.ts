@@ -149,11 +149,35 @@ describe("tool_call hook", () => {
 		__resetResolvers();
 	});
 
-	it("returns undefined on missing path input", async () => {
+	it("blocks on missing path input (fail-closed)", async () => {
 		const log = new SessionLog({ appendEntry: vi.fn() });
 		const h = makeToolCallHandler({ analyzer, engine: makeEngine(), log });
 		const ctx = makeCtx(true);
 		const r = await h({ toolName: "write", input: {} }, ctx);
-		expect(r).toBeUndefined();
+		expect(r).toEqual(expect.objectContaining({ block: true }));
+	});
+
+	it("blocks bash with non-string command input (fail-closed)", async () => {
+		const log = new SessionLog({ appendEntry: vi.fn() });
+		const h = makeToolCallHandler({ analyzer, engine: makeEngine(), log });
+		const ctx = makeCtx(true);
+		const r = await h({ toolName: "bash", input: { command: { toString: () => "rm" } } }, ctx);
+		expect(r).toEqual(expect.objectContaining({ block: true }));
+	});
+
+	it("blocks bash with missing command input", async () => {
+		const log = new SessionLog({ appendEntry: vi.fn() });
+		const h = makeToolCallHandler({ analyzer, engine: makeEngine(), log });
+		const ctx = makeCtx(true);
+		const r = await h({ toolName: "bash", input: {} }, ctx);
+		expect(r).toEqual(expect.objectContaining({ block: true }));
+	});
+
+	it("blocks write with non-string path input", async () => {
+		const log = new SessionLog({ appendEntry: vi.fn() });
+		const h = makeToolCallHandler({ analyzer, engine: makeEngine(), log });
+		const ctx = makeCtx(true);
+		const r = await h({ toolName: "write", input: { path: 42 } }, ctx);
+		expect(r).toEqual(expect.objectContaining({ block: true }));
 	});
 });
