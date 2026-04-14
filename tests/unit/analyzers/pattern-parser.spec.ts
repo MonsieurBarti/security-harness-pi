@@ -207,3 +207,91 @@ describe("matchesBash — requiresPositional (:+)", () => {
 		expect(matchesBash(r, sc(["npm", "install", "--save-dev", "react"]), [], "/cwd")).toBe(true);
 	});
 });
+
+describe("matchesBash — pipedInto", () => {
+	it("matches when piped into the named command", () => {
+		const r = parsePattern("Bash(curl:*)|sh");
+		const a = sc(["curl", "http://x"]);
+		const b = sc(["sh"]);
+		a.pipeNext = b;
+		b.pipePrev = a;
+		expect(matchesBash(r, a, [a, b], "/cwd")).toBe(true);
+	});
+
+	it("does not match without pipe", () => {
+		const r = parsePattern("Bash(curl:*)|sh");
+		expect(matchesBash(r, sc(["curl", "http://x"]), [], "/cwd")).toBe(false);
+	});
+
+	it("does not match when piped into a different command", () => {
+		const r = parsePattern("Bash(curl:*)|sh");
+		const a = sc(["curl", "http://x"]);
+		const b = sc(["grep", "foo"]);
+		a.pipeNext = b;
+		b.pipePrev = a;
+		expect(matchesBash(r, a, [a, b], "/cwd")).toBe(false);
+	});
+
+	it("matches /bin/sh by basename when piped", () => {
+		const r = parsePattern("Bash(curl:*)|sh");
+		const a = sc(["curl", "http://x"]);
+		const b = sc(["/bin/sh"]);
+		a.pipeNext = b;
+		b.pipePrev = a;
+		expect(matchesBash(r, a, [a, b], "/cwd")).toBe(true);
+	});
+
+	it("does not match if pipe target argv0 is a substitution", () => {
+		const r = parsePattern("Bash(curl:*)|sh");
+		const a = sc(["curl", "http://x"]);
+		const b = sc(["$(echo sh)"], { argvKinds: ["substitution"], argv0Basename: "$(echo sh)" });
+		a.pipeNext = b;
+		b.pipePrev = a;
+		expect(matchesBash(r, a, [a, b], "/cwd")).toBe(false);
+	});
+});
+
+describe("matchesBash — custom handler", () => {
+	it("calls the handler match function", () => {
+		let called = false;
+		__registerHandlerForTests("__test_observed", {
+			match: () => {
+				called = true;
+				return true;
+			},
+		});
+		const r = parsePattern("Bash(git push)@__test_observed");
+		expect(matchesBash(r, sc(["git", "push"]), [], "/cwd")).toBe(true);
+		expect(called).toBe(true);
+	});
+
+	it("returns false when handler returns false", () => {
+		__registerHandlerForTests("__test_false", { match: () => false });
+		const r = parsePattern("Bash(git push)@__test_false");
+		expect(matchesBash(r, sc(["git", "push"]), [], "/cwd")).toBe(false);
+	});
+
+	it("fail-closes when handler throws", () => {
+		__registerHandlerForTests("__test_throws", {
+			match: () => {
+				throw new Error("boom");
+			},
+		});
+		const r = parsePattern("Bash(git push)@__test_throws");
+		expect(matchesBash(r, sc(["git", "push"]), [], "/cwd")).toBe(true);
+	});
+
+	it("passes parsed customArgs to handler", () => {
+		let received: unknown;
+		__registerHandlerForTests("__test_args_check", {
+			parseArgs: (s) => (s ?? "").split(",").map((x) => x.trim()),
+			match: (ctx) => {
+				received = ctx.args;
+				return true;
+			},
+		});
+		const r = parsePattern("Bash(git push)@__test_args_check(release/*,hotfix/*)");
+		matchesBash(r, sc(["git", "push"]), [], "/cwd");
+		expect(received).toEqual(["release/*", "hotfix/*"]);
+	});
+});
