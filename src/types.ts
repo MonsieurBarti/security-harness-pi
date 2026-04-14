@@ -6,6 +6,7 @@ export interface Match {
 	argv0?: string | string[];
 	argvAny?: string[];
 	argvAll?: string[];
+	argvExact?: boolean; // when true, argv length must equal 1 + (argvAll?.length ?? 0)
 	argvPattern?: string;
 	redirectsTo?: string[];
 	pipedFrom?: string[];
