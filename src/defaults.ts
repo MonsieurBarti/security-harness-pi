@@ -42,7 +42,7 @@ export const DEFAULT_FORBID: Rule[] = [
 		description: "fork bomb pattern",
 		kind: "bash",
 		severity: "forbid",
-		match: { argvPattern: ":\\(\\)\\{.*:\\|:&.*\\};:" },
+		match: { custom: "fork-bomb" },
 		reason: "Fork bomb pattern detected.",
 	},
 	{

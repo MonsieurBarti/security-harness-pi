@@ -1,6 +1,7 @@
 import type { HandlerDefinition } from "../types.js";
 import { cargoAdd } from "./cargo-add.js";
 import { curlPipeShell } from "./curl-pipe-shell.js";
+import { forkBomb } from "./fork-bomb.js";
 import { gitPushBranch } from "./git-push-branch.js";
 import { gitPushDefaultBranch } from "./git-push-default-branch.js";
 import { gitPushForce } from "./git-push-force.js";
@@ -21,6 +22,7 @@ const registry: Record<string, HandlerDefinition> = {
 	"reverse-shell": reverseShell,
 	"escapes-project": pathEscapesProject,
 	"nonliteral-argv0": nonliteralArgv0,
+	"fork-bomb": forkBomb,
 };
 
 export function getHandler(name: string): HandlerDefinition | undefined {

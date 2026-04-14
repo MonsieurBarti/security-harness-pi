@@ -45,7 +45,7 @@ describe("Group 1: direct known-forbidden", () => {
 	// three ":" function commands; argvPattern ":\(\)\{.*:\|:&.*\};:" is tested against
 	// argv.join(" ") which is just ":", never matching. Fix: match against the raw input
 	// string in the policy engine or add a dedicated handler that inspects the raw command.
-	it.skip("fork bomb", () => expectBlocked(":(){ :|:& };:"));
+	it("fork bomb", () => expectBlocked(":(){ :|:& };:"));
 	it("mkfs.ext4", () => expectBlocked("mkfs.ext4 /dev/sda1"));
 });
 
