@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/MonsieurBarti/security-harness-pi/compare/security-harness-pi-v0.1.1...security-harness-pi-v0.1.2) (2026-05-14)
+
+
+### Features
+
+* block bash commands writing outside cwd (forbid.bash-file-escape) ([41c4748](https://github.com/MonsieurBarti/security-harness-pi/commit/41c474864d423ceaf92975663e0e912c034de770))
+* block bash commands writing outside cwd (forbid.bash-file-escape) ([0928853](https://github.com/MonsieurBarti/security-harness-pi/commit/09288530597d596c0533566e8e6117046acbea8f))
+
 ## [0.1.1](https://github.com/MonsieurBarti/security-harness-pi/compare/security-harness-pi-v0.1.0...security-harness-pi-v0.1.1) (2026-04-14)
 
 
