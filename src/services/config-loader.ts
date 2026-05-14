@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePattern } from "../analyzers/pattern-parser.js";
 import { DEFAULT_ASK, DEFAULT_FORBID } from "../defaults.js";
-import type { ResolvedConfig, Rule, Severity } from "../types.js";
+import type { FileArgSpec, ResolvedConfig, Rule, Severity } from "../types.js";
 
 export interface LoadOpts {
 	cwd: string;
@@ -16,6 +16,7 @@ interface RawConfig {
 	ask?: (string | Rule)[];
 	disable?: string[];
 	rules?: Rule[];
+	bashFileSignatures?: FileArgSpec[];
 }
 
 export async function loadConfig(opts: LoadOpts): Promise<ResolvedConfig> {
@@ -93,6 +94,10 @@ export async function loadConfig(opts: LoadOpts): Promise<ResolvedConfig> {
 
 	const enabled = globalCfg?.enabled ?? true;
 	const mode = globalCfg?.mode ?? "enforce";
+	const bashFileSignatures: FileArgSpec[] = [
+		...(globalCfg?.bashFileSignatures ?? []),
+		...(projectCfg?.bashFileSignatures ?? []),
+	];
 
 	return {
 		enabled,
@@ -101,6 +106,7 @@ export async function loadConfig(opts: LoadOpts): Promise<ResolvedConfig> {
 		askRules: ask,
 		warnings,
 		sources,
+		bashFileSignatures,
 	};
 }
 

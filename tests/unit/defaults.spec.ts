@@ -23,6 +23,7 @@ describe("DEFAULT_FORBID", () => {
 	it("ships the must-have forbid rules", () => {
 		const ids = DEFAULT_FORBID.map((r) => r.id);
 		const required = [
+			"forbid.bash-file-escape",
 			"forbid.privilege-escalation",
 			"forbid.rm-rf-root",
 			"forbid.dd-device",

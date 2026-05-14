@@ -72,6 +72,7 @@ All handlers are in a closed registry — you configure existing ones, you canno
 | `fork-bomb` | (default rule only) | 3+ bare `:` commands from function-def parsing |
 | `nonliteral-argv0` | (default rule only) | argv0 is variable / substitution / process-substitution |
 | `escapes-project` | `Write(*)@escapes-project` | path resolves outside project root |
+| `bash-file-escape` | (default rule only) | bash redirect or known command (cp, mv, sed, tee, …) writes outside project root |
 
 ## Config merge
 
@@ -79,10 +80,28 @@ All handlers are in a closed registry — you configure existing ones, you canno
 2. **Global** `~/.pi/agent/security-harness.json`:
    - `disable` removes default rules by id
    - `forbid`, `ask`, `rules` add new rules
+   - `bashFileSignatures` extends the built-in command signatures for `bash-file-escape`
 3. **Project** `<project>/.pi/security-harness.json`:
    - `forbid`, `ask`, `rules` add new rules
+   - `bashFileSignatures` extends the built-in command signatures
    - **`disable`, `enabled`, `mode` are ignored** with a warning (an agent with project write access cannot relax global settings)
 4. De-duplicated by id — **later wins**
+
+### Extending `bashFileSignatures`
+
+The `bash-file-escape` handler ships with built-in signatures for common file-writing commands (`cp`, `mv`, `sed`, `tee`, `rsync`, etc.). You can add or override signatures via config:
+
+```json
+{
+  "bashFileSignatures": [
+    { "command": "mktemp", "fileArgs": { "type": "last-positional", "count": 1 } },
+    { "command": "sponge", "fileArgs": { "type": "all-positional" } }
+  ]
+}
+```
+
+- `type: "all-positional"` — every positional arg after flag-skipping is a file candidate
+- `type: "last-positional"` — only the last `count` positional args are file candidates (default `count: 1`)
 
 ## Modes
 
@@ -94,6 +113,7 @@ All handlers are in a closed registry — you configure existing ones, you canno
 See `src/defaults.ts` for the authoritative list. Summary:
 
 **Forbidden:**
+- Bash commands writing outside the project root (redirects or known commands like `cp`, `mv`, `sed`, `tee`, `rsync`)
 - Privilege escalation (`sudo`, `su`, `doas`)
 - `rm -rf` on `/`, `~`, or `$HOME`
 - `dd` to device, `mkfs`, fork bombs
@@ -102,7 +122,7 @@ See `src/defaults.ts` for the authoritative list. Summary:
 - Variable / substitution / process-substitution as argv0
 - Reads of `~/.ssh/id_*`, `~/.aws/credentials`, `~/.gnupg/**`, `~/.config/gh/hosts.yml`
 - Writes to system paths (`/etc`, `/usr`, `/System`, etc.)
-- Writes escaping the project root
+- Writes escaping the project root (native `write`/`edit` tools)
 - `eval`
 
 **Ask-first:**

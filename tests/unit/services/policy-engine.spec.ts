@@ -22,6 +22,7 @@ const makeEngine = (mode: "enforce" | "warn" = "enforce") =>
 		askRules: DEFAULT_ASK,
 		warnings: [],
 		sources: { defaults: true },
+		bashFileSignatures: [],
 	});
 
 describe("PolicyEngine.classifyBash", () => {
@@ -124,6 +125,7 @@ describe("PolicyEngine — negation", () => {
 			askRules: [],
 			warnings: [],
 			sources: { defaults: true },
+			bashFileSignatures: [],
 		});
 		const echo = analyzer.analyze("echo hi");
 		expect(engine.classifyBash(echo, "/proj").action).toBe("allow");
