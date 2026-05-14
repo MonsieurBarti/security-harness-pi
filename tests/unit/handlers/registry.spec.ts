@@ -20,6 +20,7 @@ describe("handler registry — final", () => {
 		"nonliteral-argv0",
 		"fork-bomb",
 		"pipe-to-shell",
+		"bash-file-escape",
 	];
 
 	for (const name of expected) {
@@ -30,7 +31,7 @@ describe("handler registry — final", () => {
 		});
 	}
 
-	it("listHandlers returns all 12 handlers", () => {
+	it("listHandlers returns all 13 handlers", () => {
 		const names = listHandlers();
 		for (const n of expected) {
 			expect(names).toContain(n);

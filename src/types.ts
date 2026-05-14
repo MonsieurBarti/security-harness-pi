@@ -73,6 +73,13 @@ export interface Verdict {
 	description?: string;
 }
 
+export type FileArgDef = { type: "all-positional" } | { type: "last-positional"; count?: number };
+
+export interface FileArgSpec {
+	command: string;
+	fileArgs: FileArgDef;
+}
+
 export interface Config {
 	enabled: boolean;
 	mode: "enforce" | "warn";
@@ -80,6 +87,7 @@ export interface Config {
 	ask: (string | Rule)[];
 	disable: string[];
 	rules: Rule[];
+	bashFileSignatures?: FileArgSpec[];
 }
 
 export interface ResolvedConfig {
@@ -89,13 +97,15 @@ export interface ResolvedConfig {
 	askRules: Rule[];
 	warnings: string[];
 	sources: { defaults: true; global?: string; project?: string };
+	bashFileSignatures: FileArgSpec[];
 }
 
 export interface HandlerCtx {
 	cwd: string;
 	simpleCommand: SimpleCommand;
 	allCommands: SimpleCommand[];
-	args?: unknown;
+	args?: unknown | undefined;
+	config?: ResolvedConfig | undefined;
 }
 
 export interface HandlerDefinition {

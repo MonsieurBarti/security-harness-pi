@@ -35,7 +35,7 @@ export class PolicyEngine {
 		for (const cmd of analysis.commands) {
 			for (const rule of this.cfg.forbiddenRules) {
 				if (rule.kind !== "bash") continue;
-				const matched = matchesBash(rule, cmd, analysis.commands, cwd);
+				const matched = matchesBash(rule, cmd, analysis.commands, cwd, this.cfg);
 				const effective = matched !== !!rule.negate;
 				if (effective) {
 					return this.wrap(makeVerdict("forbid", rule.id, rule.description, rule.reason));
@@ -44,7 +44,7 @@ export class PolicyEngine {
 			if (!askHit) {
 				for (const rule of this.cfg.askRules) {
 					if (rule.kind !== "bash") continue;
-					const matched = matchesBash(rule, cmd, analysis.commands, cwd);
+					const matched = matchesBash(rule, cmd, analysis.commands, cwd, this.cfg);
 					const effective = matched !== !!rule.negate;
 					if (effective) {
 						askHit = makeVerdict("ask", rule.id, rule.description, rule.reason);
@@ -61,7 +61,7 @@ export class PolicyEngine {
 
 		for (const rule of this.cfg.forbiddenRules) {
 			if (rule.kind !== wantKind) continue;
-			const matched = matchesPath(rule, path, cwd);
+			const matched = matchesPath(rule, path, cwd, this.cfg);
 			const effective = matched !== !!rule.negate;
 			if (effective) {
 				return this.wrap(makeVerdict("forbid", rule.id, rule.description, rule.reason));
@@ -70,7 +70,7 @@ export class PolicyEngine {
 
 		for (const rule of this.cfg.askRules) {
 			if (rule.kind !== wantKind) continue;
-			const matched = matchesPath(rule, path, cwd);
+			const matched = matchesPath(rule, path, cwd, this.cfg);
 			const effective = matched !== !!rule.negate;
 			if (effective) {
 				return this.wrap(makeVerdict("ask", rule.id, rule.description, rule.reason));

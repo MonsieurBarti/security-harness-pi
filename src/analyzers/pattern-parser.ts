@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { getHandler } from "../handlers/index.js";
-import type { Rule, RuleKind, Severity, SimpleCommand } from "../types.js";
+import type { ResolvedConfig, Rule, RuleKind, Severity, SimpleCommand } from "../types.js";
 import { PathAnalyzer } from "./path-analyzer.js";
 
 export function parsePattern(input: string, severity: Severity = "forbid"): Rule {
@@ -152,6 +152,7 @@ export function matchesBash(
 	cmd: SimpleCommand,
 	allCommands: SimpleCommand[],
 	cwd: string,
+	config?: ResolvedConfig,
 ): boolean {
 	if (rule.kind !== "bash") return false;
 	const m = rule.match ?? {};
@@ -210,7 +211,8 @@ export function matchesBash(
 		const def = getHandler(m.custom);
 		if (!def) return false;
 		try {
-			if (!def.match({ cwd, simpleCommand: cmd, allCommands, args: m.customArgs })) return false;
+			if (!def.match({ cwd, simpleCommand: cmd, allCommands, args: m.customArgs, config }))
+				return false;
 		} catch {
 			return true; // fail-closed
 		}
@@ -226,7 +228,12 @@ function globToRegexSimple(glob: string): string {
 		.replace(/\?/g, ".")}$`;
 }
 
-export function matchesPath(rule: Rule, path: string, cwd: string): boolean {
+export function matchesPath(
+	rule: Rule,
+	path: string,
+	cwd: string,
+	config?: ResolvedConfig,
+): boolean {
 	if (rule.kind !== "path-write" && rule.kind !== "path-read") return false;
 	const pa = new PathAnalyzer(cwd);
 
@@ -250,6 +257,7 @@ export function matchesPath(rule: Rule, path: string, cwd: string): boolean {
 				},
 				allCommands: [],
 				args: rule.match.customArgs,
+				config,
 			});
 		} catch {
 			return true;

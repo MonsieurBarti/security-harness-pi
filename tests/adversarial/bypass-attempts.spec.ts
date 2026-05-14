@@ -21,6 +21,7 @@ function makeEngine(): PolicyEngine {
 		askRules: DEFAULT_ASK,
 		warnings: [],
 		sources: { defaults: true },
+		bashFileSignatures: [],
 	});
 }
 
@@ -35,6 +36,11 @@ function expectBlocked(command: string): void {
 		throw new Error(`BYPASS: "${command}" was allowed`);
 	}
 	expect(action === "forbid" || action === "ask").toBe(true);
+}
+
+function expectAllowed(command: string): void {
+	const action = run(command);
+	expect(action).toBe("allow");
 }
 
 describe("Group 1: direct known-forbidden", () => {
@@ -227,4 +233,19 @@ describe("Group 17: extended package install", () => {
 	it("uv add requests", () => expectBlocked("uv add requests"));
 	it("uv pip install flask", () => expectBlocked("uv pip install flask"));
 	it("deno add npm:lodash", () => expectBlocked("deno add npm:lodash"));
+});
+
+describe("Group 18: bash file escapes", () => {
+	it("sed -i ~/.pi/agent/models.json", () =>
+		expectBlocked(
+			"sed -i '' 's|https://api.fireworks.ai/inference|https://api.fireworks.ai/inference/v1|' ~/.pi/agent/models.json",
+		));
+	it("echo evil > ~/.pi/agent/models.json", () =>
+		expectBlocked("echo 'evil' > ~/.pi/agent/models.json"));
+	it("cp /etc/passwd .", () => expectBlocked("cp /etc/passwd ."));
+	it("mv file.txt /tmp/", () => expectBlocked("mv file.txt /tmp/"));
+	it("tee /etc/hosts", () => expectBlocked("tee /etc/hosts"));
+	it("touch /etc/newfile", () => expectBlocked("touch /etc/newfile"));
+	it("redirect inside project is allowed", () => expectAllowed("echo hello > output.txt"));
+	it("sed inside project is allowed", () => expectAllowed("sed -i 's|a|b|' src/main.ts"));
 });

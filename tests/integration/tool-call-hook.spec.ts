@@ -22,6 +22,7 @@ function makeEngine(mode: "enforce" | "warn" = "enforce"): PolicyEngine {
 		askRules: DEFAULT_ASK,
 		warnings: [],
 		sources: { defaults: true },
+		bashFileSignatures: [],
 	});
 }
 

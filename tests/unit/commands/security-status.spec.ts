@@ -11,6 +11,7 @@ function makeResolved(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
 		askRules: [],
 		warnings: [],
 		sources: { defaults: true },
+		bashFileSignatures: [],
 		...overrides,
 	};
 }

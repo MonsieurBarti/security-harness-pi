@@ -5,6 +5,7 @@
 - **Agent runs commands it shouldn't, by mistake.** Hallucinations, misunderstood instructions, cargo-culted snippets.
 - **Prompt-injection payloads** trying to talk the agent into `sudo`, `rm -rf /`, `curl | sh`, or writing CI-takeover files.
 - **Accidental writes** to `.env`, CI workflow files, SSH keys, GPG credentials.
+- **Bash file escapes** — `sed -i ~/.pi/agent/models.json`, `cp /etc/passwd .`, `echo evil > ~/.ssh/authorized_keys` — any redirect or known file-writing command targeting a path outside the project root.
 - **Accidental `git push --force`** or push to the repo's default branch.
 - **Accidental dependency additions** (`npm install <malicious-pkg>`) — ask-first forces human review.
 

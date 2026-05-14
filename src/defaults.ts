@@ -2,6 +2,14 @@ import type { Rule } from "./types.js";
 
 export const DEFAULT_FORBID: Rule[] = [
 	{
+		id: "forbid.bash-file-escape",
+		description: "bash command writes outside project root",
+		kind: "bash",
+		severity: "forbid",
+		match: { custom: "bash-file-escape" },
+		reason: "Bash command writes to or modifies a file outside the project root.",
+	},
+	{
 		id: "forbid.privilege-escalation",
 		description: "sudo/su/doas",
 		kind: "bash",

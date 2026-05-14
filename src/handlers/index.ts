@@ -1,4 +1,5 @@
 import type { HandlerDefinition } from "../types.js";
+import { bashFileEscape } from "./bash-file-escape.js";
 import { cargoAdd } from "./cargo-add.js";
 import { curlPipeShell } from "./curl-pipe-shell.js";
 import { forkBomb } from "./fork-bomb.js";
@@ -25,6 +26,7 @@ const registry: Record<string, HandlerDefinition> = {
 	"nonliteral-argv0": nonliteralArgv0,
 	"fork-bomb": forkBomb,
 	"pipe-to-shell": pipeToShell,
+	"bash-file-escape": bashFileEscape,
 };
 
 export function getHandler(name: string): HandlerDefinition | undefined {
